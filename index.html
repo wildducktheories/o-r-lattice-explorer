@@ -249,7 +249,7 @@
         <div class="canvas-container">
             <h2 style="color: #4a9eff; margin-bottom: 15px;">m vs o Plot</h2>
             <div style="color: #999; margin-bottom: 10px; font-size: 0.9em;">
-                For odd x: m = (x+1)/2^j plotted against o (remaining odd steps)
+                For odd x: m = (x+1)/(2^j · 3^i) plotted against o (remaining odd steps), with i = v₃(x+1). Circle size = (i+1).
             </div>
             <canvas id="mPlotCanvas" width="800" height="600"></canvas>
         </div>
@@ -320,8 +320,11 @@
                     // Compute j = v_2(x+1) - power of 2 dividing (x+1)
                     tempSteps[i].j = this.v2(currentX + 1);
 
-                    // Compute m = (x+1) / 2^j
-                    tempSteps[i].m = (currentX + 1) / Math.pow(2, tempSteps[i].j);
+                    // Compute i = v_3(x+1) - power of 3 dividing (x+1)
+                    tempSteps[i].i = this.v3(currentX + 1);
+
+                    // Compute m = (x+1) / (2^j * 3^i)
+                    tempSteps[i].m = (currentX + 1) / (Math.pow(2, tempSteps[i].j) * Math.pow(3, tempSteps[i].i));
 
                     if (i === tempSteps.length - 1) {
                         // At x=1: o=0, e=0, k=0
@@ -362,6 +365,17 @@
                 while (n % 2 === 0) {
                     count++;
                     n = n / 2;
+                }
+                return count;
+            }
+
+            // Compute v_3(n) - the 3-adic valuation (power of 3 dividing n)
+            v3(n) {
+                if (n === 0) return Infinity;
+                let count = 0;
+                while (n % 3 === 0) {
+                    count++;
+                    n = n / 3;
                 }
                 return count;
             }
@@ -849,7 +863,7 @@
                 const blockPattern = sequence.getBlockForStep(stepIndex);
 
                 // Build tooltip text lines
-                const coordsText = `x=${step.x}, o=${step.o}, r=${step.r}, k=${step.k}, j=${step.j}, m=${step.m}`;
+                const coordsText = `x=${step.x}, o=${step.o}, r=${step.r}, k=${step.k}, j=${step.j}, i=${step.i}, m=${step.m}`;
 
                 this.ctx.font = '14px sans-serif';
                 const coordsMetrics = this.ctx.measureText(coordsText);
@@ -1074,11 +1088,138 @@
             }
         }
 
+        // M vs O plot renderer
+        class MPlotRenderer {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.data = null;
+            }
+
+            clear() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.data = null;
+            }
+
+            render(sequence) {
+                // Extract (o, m, i) tuples for odd x values only
+                this.data = [];
+                for (const step of sequence.steps) {
+                    if (step.x % 2 === 1) {
+                        this.data.push({ o: step.o, m: step.m, i: step.i });
+                    }
+                }
+
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                if (this.data.length === 0) return;
+
+                // Find bounds
+                const oValues = this.data.map(d => d.o);
+                const mValues = this.data.map(d => d.m);
+                const minO = Math.min(...oValues);
+                const maxO = Math.max(...oValues);
+                const maxM = Math.max(...mValues);
+                const minM = 0;  // Scale m-axis from 0 to maxM
+
+                // Add padding
+                const padding = 60;
+                const plotWidth = this.canvas.width - padding * 2;
+                const plotHeight = this.canvas.height - padding * 2;
+
+                // Calculate scale - m-axis from 0 to maxM
+                const oRange = maxO - minO || 1;
+                const mRange = maxM || 1;  // Range from 0 to maxM
+                const scaleX = plotWidth / oRange;
+                const scaleY = plotHeight / mRange;
+
+                // Helper function to convert o,m to screen coordinates
+                const toScreenX = (o) => padding + (o - minO) * scaleX;
+                const toScreenY = (m) => this.canvas.height - padding - m * scaleY;
+
+                // Draw axes
+                this.ctx.strokeStyle = '#666';
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.moveTo(padding, this.canvas.height - padding);
+                this.ctx.lineTo(this.canvas.width - padding, this.canvas.height - padding);
+                this.ctx.moveTo(padding, this.canvas.height - padding);
+                this.ctx.lineTo(padding, padding);
+                this.ctx.stroke();
+
+                // Draw axis labels
+                this.ctx.fillStyle = '#e0e0e0';
+                this.ctx.font = '16px sans-serif';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('o (remaining odd steps)', this.canvas.width / 2, this.canvas.height - 10);
+                this.ctx.save();
+                this.ctx.translate(15, this.canvas.height / 2);
+                this.ctx.rotate(-Math.PI / 2);
+                this.ctx.fillText('m = (x+1)/(2^j · 3^i)', 0, 0);
+                this.ctx.restore();
+
+                // Draw grid lines
+                this.ctx.strokeStyle = '#333';
+                this.ctx.lineWidth = 0.5;
+                this.ctx.font = '12px sans-serif';
+                this.ctx.fillStyle = '#999';
+
+                // O axis ticks (show every integer or intelligently space them)
+                const oTickStep = Math.max(1, Math.ceil(oRange / 10));
+                this.ctx.textAlign = 'center';
+                for (let o = Math.ceil(minO); o <= maxO; o += oTickStep) {
+                    const x = toScreenX(o);
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, padding);
+                    this.ctx.lineTo(x, this.canvas.height - padding);
+                    this.ctx.stroke();
+                    this.ctx.fillText(o.toString(), x, this.canvas.height - padding + 20);
+                }
+
+                // M axis ticks
+                const mTickStep = Math.max(1, Math.ceil(mRange / 10));
+                this.ctx.textAlign = 'right';
+                for (let m = Math.ceil(minM); m <= maxM; m += mTickStep) {
+                    const y = toScreenY(m);
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(padding, y);
+                    this.ctx.lineTo(this.canvas.width - padding, y);
+                    this.ctx.stroke();
+                    this.ctx.fillText(m.toString(), padding - 10, y + 4);
+                }
+
+                // Draw points
+                this.ctx.fillStyle = '#4a9eff';
+                this.ctx.strokeStyle = '#000';
+                this.ctx.lineWidth = 1;
+
+                for (const point of this.data) {
+                    const x = toScreenX(point.o);
+                    const y = toScreenY(point.m);
+
+                    // i=0 → 3 pixels, i=1 → 4 pixels, i=2 → 5 pixels, etc.
+                    const radius = point.i + 3;
+
+                    this.ctx.beginPath();
+                    this.ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                    this.ctx.fill();
+                    this.ctx.stroke();
+                }
+
+                // Draw title
+                this.ctx.fillStyle = '#e0e0e0';
+                this.ctx.font = 'bold 16px sans-serif';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('m vs o for odd x', this.canvas.width / 2, 25);
+            }
+        }
+
         // Main application
         class Application {
             constructor() {
                 this.renderer = new LatticeRenderer('latticeCanvas');
                 this.heatmapRenderer = new HeatmapRenderer('heatmapCanvas');
+                this.mPlotRenderer = new MPlotRenderer('mPlotCanvas');
                 this.currentSequence = null;
                 this.loadFromURL();
             }
@@ -1172,6 +1313,7 @@
                     this.renderer.clear();
                     this.renderer.addSequence(sequence);
                     this.heatmapRenderer.render(sequence);
+                    this.mPlotRenderer.render(sequence);
                     this.updateInfo(sequence);
 
                     // Update URL to reflect current x value
@@ -1186,6 +1328,7 @@
             clearCanvas() {
                 this.renderer.clear();
                 this.heatmapRenderer.clear();
+                this.mPlotRenderer.clear();
                 this.currentSequence = null;
                 document.getElementById('oeSequence').textContent = '-';
                 document.getElementById('seqLength').textContent = '-';

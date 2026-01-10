@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>O-R Lattice: Collatz Sequence Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+            color: #4a9eff;
+        }
+
+        .subtitle {
+            color: #999;
+            font-size: 0.9em;
+        }
+
+        .controls {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .control-row:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            font-weight: 500;
+            min-width: 80px;
+        }
+
+        input[type="number"],
+        input[type="text"] {
+            background: #1a1a1a;
+            border: 1px solid #444;
+            color: #e0e0e0;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 1em;
+            width: 200px;
+        }
+
+        input[type="number"]:focus,
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+
+        button {
+            background: #4a9eff;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 4px;
+            font-size: 1em;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #3a8eef;
+        }
+
+        button:active {
+            background: #2a7edf;
+        }
+
+        .canvas-container {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            overflow: auto;
+        }
+
+        canvas {
+            display: block;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            cursor: crosshair;
+        }
+
+        .info-panel {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .info-section {
+            margin-bottom: 15px;
+        }
+
+        .info-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .info-label {
+            font-weight: 500;
+            color: #4a9eff;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-family: 'Courier New', monospace;
+            color: #e0e0e0;
+            padding: 8px;
+            background: #1a1a1a;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+        }
+
+        .error {
+            background: #4a1a1a;
+            color: #ff6b6b;
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border: 1px solid #ff6b6b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>O-R Lattice: Collatz Sequence Visualizer</h1>
+            <div class="subtitle">Explore 3x+1 sequences through the (o,r) coordinate system</div>
+        </header>
+
+        <div class="controls">
+            <div class="control-row">
+                <label for="x0Input">Starting value (x₀):</label>
+                <input type="number" id="x0Input" value="27" min="1" step="1">
+                <button onclick="app.plotSequence()">Plot Sequence</button>
+                <button onclick="app.clearCanvas()">Clear</button>
+            </div>
+            <div class="control-row">
+                <label>Examples:</label>
+                <button onclick="app.loadExample(27)">27</button>
+                <button onclick="app.loadExample(31)">31</button>
+                <button onclick="app.loadExample(63)">63</button>
+                <button onclick="app.loadExample(127)">127</button>
+                <button onclick="app.loadExample(70055)">70055</button>
+                <button onclick="app.loadExample(77031)">77031</button>
+            </div>
+            <div class="control-row">
+                <label>
+                    <input type="checkbox" id="showEvenTerms" onchange="app.toggleEvenTerms()">
+                    Show even terms on lattice
+                </label>
+            </div>
+        </div>
+
+        <div id="errorPanel" class="error" style="display: none;"></div>
+
+        <div class="canvas-container">
+            <canvas id="latticeCanvas" width="1200" height="800"></canvas>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #ff6b6b;"></div>
+                    <span>O step (3x+1)/2: moves (o,r) → (o-1, r-1)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #4a9eff;"></div>
+                    <span>E step x/2^k (divide out all 2s): moves (o,r) → (o, r+k-2)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #00ff00); border: 2px dashed #fff;"></div>
+                    <span>Colored boxes: ((OE)+E+) blocks accelerate multiple O steps</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <div class="info-section">
+                <div class="info-label">Sequence (OE notation):</div>
+                <div id="oeSequence" class="info-value">-</div>
+            </div>
+            <div class="info-section">
+                <div class="info-label">Sequence length:</div>
+                <div id="seqLength" class="info-value">-</div>
+            </div>
+            <div class="info-section">
+                <div class="info-label">((OE)+E+) blocks:</div>
+                <div id="oeBlocks" class="info-value">-</div>
+            </div>
+        </div>
+
+        <div class="canvas-container">
+            <h2 style="color: #4a9eff; margin-bottom: 15px;">Heatmap: (k, j) Distribution</h2>
+            <div style="color: #999; margin-bottom: 10px; font-size: 0.9em;">
+                For odd x: j = v₂(x+1), k = v₂(3x+1)
+            </div>
+            <canvas id="heatmapCanvas" width="800" height="600"></canvas>
+        </div>
+
+        <div class="canvas-container">
+            <h2 style="color: #4a9eff; margin-bottom: 15px;">m vs o Plot</h2>
+            <div style="color: #999; margin-bottom: 10px; font-size: 0.9em;">
+                For odd x: m = (x+1)/2^j plotted against o (remaining odd steps)
+            </div>
+            <canvas id="mPlotCanvas" width="800" height="600"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const CONFIG = {
+            maxIterations: 10000,
+            gridSize: 20,
+            pointRadius: 4,
+            lineWidth: 2,
+            colors: {
+                oddStep: '#ff6b6b',    // Red for O steps (3x+1)
+                evenStep: '#4a9eff',   // Blue for E steps (x/2)
+                grid: '#333',
+                axes: '#666',
+                point: '#fff',
+                blocks: [
+                    '#ff00ff',  // Magenta
+                    '#00ffff',  // Cyan
+                    '#ffff00',  // Yellow
+                    '#00ff00',  // Green
+                    '#ff8800',  // Orange
+                    '#8800ff',  // Purple
+                    '#ff0088',  // Pink
+                    '#88ff00',  // Lime
+                ]
+            }
+        };
+
+        // Collatz sequence computation with (o, e, r) tracking
+        class CollatzSequence {
+            constructor(x0) {
+                this.x0 = x0;
+                this.steps = [];
+                this.compute();
+            }
+
+            compute() {
+                // First, compute the sequence forward to get x values and types
+                let x = this.x0;
+                let tempSteps = [{ x: x, type: 'start' }];
+
+                let iterations = 0;
+                while (x !== 1 && iterations < CONFIG.maxIterations) {
+                    if (x % 2 === 1) {
+                        // Odd step: 3x+1
+                        x = 3 * x + 1;
+                        tempSteps.push({ x: x, type: 'O' });
+                    } else {
+                        // Even step: x/2
+                        x = x / 2;
+                        tempSteps.push({ x: x, type: 'E' });
+                    }
+                    iterations++;
+                }
+
+                if (iterations >= CONFIG.maxIterations) {
+                    throw new Error(`Sequence did not reach 1 within ${CONFIG.maxIterations} iterations`);
+                }
+
+                // Now compute o, e, r, k, j backwards from x=1 (where o=0, e=0)
+                // Start from the end and work backwards
+                for (let i = tempSteps.length - 1; i >= 0; i--) {
+                    const currentX = tempSteps[i].x;
+
+                    // Compute j = v_2(x+1) - power of 2 dividing (x+1)
+                    tempSteps[i].j = this.v2(currentX + 1);
+
+                    // Compute m = (x+1) / 2^j
+                    tempSteps[i].m = (currentX + 1) / Math.pow(2, tempSteps[i].j);
+
+                    if (i === tempSteps.length - 1) {
+                        // At x=1: o=0, e=0, k=0
+                        tempSteps[i].o = 0;
+                        tempSteps[i].e = 0;
+                        tempSteps[i].r = 0;
+                        tempSteps[i].k = 0;
+                        tempSteps[i].n = i;
+                    } else {
+                        // Get successor (next step in forward direction)
+                        const successor = tempSteps[i + 1];
+
+                        // If current x is odd, o = successor.o + 1, e = successor.e
+                        // If current x is even, o = successor.o, e = successor.e + 1
+                        if (currentX % 2 === 1) {
+                            tempSteps[i].o = successor.o + 1;
+                            tempSteps[i].e = successor.e;
+                            tempSteps[i].k = successor.k;
+                        } else {
+                            tempSteps[i].o = successor.o;
+                            tempSteps[i].e = successor.e + 1;
+                            // k = v_2(x) for even x
+                            tempSteps[i].k = this.v2(currentX);
+                        }
+
+                        tempSteps[i].r = 2 * tempSteps[i].o - tempSteps[i].e;
+                        tempSteps[i].n = i;
+                    }
+                }
+
+                this.steps = tempSteps;
+            }
+
+            // Compute v_2(n) - the 2-adic valuation (power of 2 dividing n)
+            v2(n) {
+                if (n === 0) return Infinity;
+                let count = 0;
+                while (n % 2 === 0) {
+                    count++;
+                    n = n / 2;
+                }
+                return count;
+            }
+
+            getOEString() {
+                return this.steps
+                    .filter(s => s.type !== 'start')
+                    .map(s => s.type)
+                    .join('');
+            }
+
+            getBounds() {
+                const oValues = this.steps.map(s => s.o);
+                const rValues = this.steps.map(s => s.r);
+                return {
+                    minO: Math.min(...oValues),
+                    maxO: Math.max(...oValues),
+                    minR: Math.min(...rValues),
+                    maxR: Math.max(...rValues)
+                };
+            }
+
+            findOEBlocks() {
+                // Find blocks matching ((OE)+E+) pattern
+                const oeString = this.getOEString();
+                const blocks = [];
+                let i = 0;
+
+                while (i < oeString.length) {
+                    // Check if we're starting an (OE)+ sequence
+                    if (i < oeString.length - 1 && oeString[i] === 'O' && oeString[i + 1] === 'E') {
+                        const blockStart = i;
+
+                        // Count (OE)+ pairs
+                        while (i < oeString.length - 1 && oeString[i] === 'O' && oeString[i + 1] === 'E') {
+                            i += 2;
+                        }
+
+                        // Mark where (OE)+ ends - this is the last E in the OE pairs
+                        const oeEndIndex = i - 1;
+
+                        // Check for E+ following the (OE)+ sequence
+                        const eStart = i;
+                        while (i < oeString.length && oeString[i] === 'E') {
+                            i++;
+                        }
+
+                        // Only count as a block if we have at least one E after (OE)+
+                        if (i > eStart) {
+                            blocks.push({
+                                start: blockStart,
+                                end: i - 1,
+                                oeEndIndex: oeEndIndex,  // Index of last E in (OE)+
+                                pattern: oeString.substring(blockStart, i)
+                            });
+                        }
+                    } else {
+                        i++;
+                    }
+                }
+
+                return blocks;
+            }
+
+            getKJDistribution() {
+                // Count occurrences of each (k, j) pair for ODD x values only
+                const counts = new Map();
+
+                for (const step of this.steps) {
+                    // Only include odd x values (matching Python: if s.x%2==1)
+                    if (step.x % 2 === 1) {
+                        const key = `${step.k},${step.j}`;
+                        counts.set(key, (counts.get(key) || 0) + 1);
+                    }
+                }
+
+                // Convert to array of {k, j, count}
+                const distribution = [];
+                for (const [key, count] of counts.entries()) {
+                    const [k, j] = key.split(',').map(Number);
+                    distribution.push({ k, j, count });
+                }
+
+                return distribution;
+            }
+
+            getBlockForStep(stepIndex) {
+                // Find which ((OE)+E+) block contains this step
+                // A block with OE indices [start, end] includes:
+                // - steps[start]: the starting odd term (before first transition)
+                // - steps[start+1] through steps[end+1]: the transitions
+                // So the block spans steps[start] through steps[end+1]
+
+                const blocks = this.findOEBlocks();
+
+                for (const block of blocks) {
+                    // Check if stepIndex is within this block's range
+                    if (stepIndex >= block.start && stepIndex <= block.end + 1) {
+                        return block.pattern;
+                    }
+                }
+
+                return null;
+            }
+
+            getLastEvenInOEPlusIndices() {
+                // Returns step indices of the last even term in each (OE)+ sequence
+                // These should be shown even when "Show even terms" is unchecked
+                const blocks = this.findOEBlocks();
+                const indices = [];
+
+                for (const block of blocks) {
+                    // oeEndIndex is the OE string index of the last E in (OE)+
+                    // Convert to step index: oeEndIndex + 1 (since steps[0] is start)
+                    const stepIndex = block.oeEndIndex + 1;
+                    indices.push(stepIndex);
+                }
+
+                return indices;
+            }
+        }
+
+        // Canvas renderer for the O-R lattice
+        class LatticeRenderer {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.sequences = [];
+                this.transform = {
+                    offsetX: 0,
+                    offsetY: 0,
+                    scale: 1
+                };
+                this.hoveredPoint = null;
+                this.showEvenTerms = false; // Default to false - only show odd terms
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                this.canvas.addEventListener('mousemove', (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const mouseX = e.clientX - rect.left;
+                    const mouseY = e.clientY - rect.top;
+
+                    this.hoveredPoint = this.findPointAtPosition(mouseX, mouseY);
+                    this.render();
+                });
+
+                this.canvas.addEventListener('mouseleave', () => {
+                    this.hoveredPoint = null;
+                    this.render();
+                });
+            }
+
+            findPointAtPosition(mouseX, mouseY) {
+                const hoverRadius = 10; // pixels
+
+                for (const seq of this.sequences) {
+                    const visibleSteps = this.getVisibleSteps(seq);
+
+                    for (const step of visibleSteps) {
+                        const x = this.toScreenX(step.o);
+                        const y = this.toScreenY(step.r);
+                        const dx = mouseX - x;
+                        const dy = mouseY - y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+
+                        if (distance <= hoverRadius) {
+                            // Return both step and sequence
+                            return { step, sequence: seq };
+                        }
+                    }
+                }
+                return null;
+            }
+
+            getVisibleSteps(sequence) {
+                // Returns steps that should be visible based on showEvenTerms setting
+                if (this.showEvenTerms) {
+                    return sequence.steps;
+                } else {
+                    // Show odd x, start, and last even in each (OE)+ sequence
+                    const lastEvenIndices = new Set(sequence.getLastEvenInOEPlusIndices());
+                    return sequence.steps.filter((s, idx) =>
+                        s.x % 2 === 1 || s.type === 'start' || lastEvenIndices.has(idx)
+                    );
+                }
+            }
+
+            clear() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.sequences = [];
+            }
+
+            addSequence(sequence) {
+                this.sequences.push(sequence);
+                this.fitToView();
+                this.render();
+            }
+
+            fitToView() {
+                if (this.sequences.length === 0) return;
+
+                // Get combined bounds from visible steps
+                let minO = Infinity, maxO = -Infinity;
+                let minR = Infinity, maxR = -Infinity;
+
+                for (const seq of this.sequences) {
+                    const visibleSteps = this.getVisibleSteps(seq);
+
+                    for (const step of visibleSteps) {
+                        minO = Math.min(minO, step.o);
+                        maxO = Math.max(maxO, step.o);
+                        minR = Math.min(minR, step.r);
+                        maxR = Math.max(maxR, step.r);
+                    }
+                }
+
+                // Add padding
+                const padding = 2;
+                minO -= padding;
+                maxO += padding;
+                minR -= padding;
+                maxR += padding;
+
+                // Calculate scale to fit
+                const rangeO = maxO - minO;
+                const rangeR = maxR - minR;
+                const scaleO = (this.canvas.width - 100) / rangeO;
+                const scaleR = (this.canvas.height - 100) / rangeR;
+                this.transform.scale = Math.min(scaleO, scaleR, CONFIG.gridSize);
+
+                // Center the view
+                this.transform.offsetX = 50 - minO * this.transform.scale;
+                this.transform.offsetY = this.canvas.height - 50 + minR * this.transform.scale;
+            }
+
+            toScreenX(o) {
+                return this.transform.offsetX + o * this.transform.scale;
+            }
+
+            toScreenY(r) {
+                return this.transform.offsetY - r * this.transform.scale;
+            }
+
+            render() {
+                // Clear canvas but not sequences
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.drawGrid();
+                this.drawAxes();
+
+                // Draw OE blocks first (as background)
+                for (const seq of this.sequences) {
+                    this.drawOEBlocks(seq);
+                }
+
+                // Then draw sequences on top
+                for (const seq of this.sequences) {
+                    this.drawSequence(seq);
+                }
+
+                // Draw tooltip last (on top)
+                if (this.hoveredPoint) {
+                    this.drawTooltip(this.hoveredPoint);
+                }
+            }
+
+            drawGrid() {
+                if (this.sequences.length === 0) return;
+
+                // Calculate bounds from visible steps
+                let minO = Infinity, maxO = -Infinity;
+                let minR = Infinity, maxR = -Infinity;
+
+                for (const seq of this.sequences) {
+                    const visibleSteps = this.getVisibleSteps(seq);
+
+                    for (const step of visibleSteps) {
+                        minO = Math.min(minO, step.o);
+                        maxO = Math.max(maxO, step.o);
+                        minR = Math.min(minR, step.r);
+                        maxR = Math.max(maxR, step.r);
+                    }
+                }
+
+                minO = Math.floor(minO) - 2;
+                maxO = Math.ceil(maxO) + 2;
+                minR = Math.floor(minR) - 2;
+                maxR = Math.ceil(maxR) + 2;
+
+                this.ctx.strokeStyle = CONFIG.colors.grid;
+                this.ctx.lineWidth = 0.5;
+
+                // Vertical grid lines (constant o)
+                for (let o = minO; o <= maxO; o++) {
+                    const x = this.toScreenX(o);
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, this.toScreenY(minR));
+                    this.ctx.lineTo(x, this.toScreenY(maxR));
+                    this.ctx.stroke();
+                }
+
+                // Horizontal grid lines (constant r)
+                for (let r = minR; r <= maxR; r++) {
+                    const y = this.toScreenY(r);
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(this.toScreenX(minO), y);
+                    this.ctx.lineTo(this.toScreenX(maxO), y);
+                    this.ctx.stroke();
+                }
+            }
+
+            drawAxes() {
+                if (this.sequences.length === 0) return;
+
+                // Calculate bounds from visible steps
+                let minO = Infinity, maxO = -Infinity;
+                let minR = Infinity, maxR = -Infinity;
+
+                for (const seq of this.sequences) {
+                    const visibleSteps = this.getVisibleSteps(seq);
+
+                    for (const step of visibleSteps) {
+                        minO = Math.min(minO, step.o);
+                        maxO = Math.max(maxO, step.o);
+                        minR = Math.min(minR, step.r);
+                        maxR = Math.max(maxR, step.r);
+                    }
+                }
+
+                minO = Math.floor(minO) - 2;
+                maxO = Math.ceil(maxO) + 2;
+                minR = Math.floor(minR) - 2;
+                maxR = Math.ceil(maxR) + 2;
+
+                this.ctx.strokeStyle = CONFIG.colors.axes;
+                this.ctx.lineWidth = 2;
+
+                // O-axis (r = 0)
+                if (minR <= 0 && maxR >= 0) {
+                    const y = this.toScreenY(0);
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(this.toScreenX(minO), y);
+                    this.ctx.lineTo(this.toScreenX(maxO), y);
+                    this.ctx.stroke();
+                }
+
+                // R-axis (o = 0)
+                if (minO <= 0 && maxO >= 0) {
+                    const x = this.toScreenX(0);
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, this.toScreenY(minR));
+                    this.ctx.lineTo(x, this.toScreenY(maxR));
+                    this.ctx.stroke();
+                }
+
+                // Labels
+                this.ctx.fillStyle = CONFIG.colors.axes;
+                this.ctx.font = '14px sans-serif';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('o →', this.toScreenX(maxO) - 20, this.toScreenY(0) - 10);
+                this.ctx.save();
+                this.ctx.translate(this.toScreenX(0) + 20, this.toScreenY(maxR) + 20);
+                this.ctx.rotate(-Math.PI / 2);
+                this.ctx.fillText('← r', 0, 0);
+                this.ctx.restore();
+            }
+
+            drawSequence(sequence) {
+                // Get visible steps
+                const filteredSteps = this.getVisibleSteps(sequence);
+
+                // Draw edges between filtered steps
+                for (let i = 0; i < filteredSteps.length - 1; i++) {
+                    const curr = filteredSteps[i];
+                    const next = filteredSteps[i + 1];
+
+                    const x1 = this.toScreenX(curr.o);
+                    const y1 = this.toScreenY(curr.r);
+                    const x2 = this.toScreenX(next.o);
+                    const y2 = this.toScreenY(next.r);
+
+                    // Color based on step type (red for odd, blue for even)
+                    this.ctx.strokeStyle = next.type === 'O' ? CONFIG.colors.oddStep : CONFIG.colors.evenStep;
+                    this.ctx.lineWidth = CONFIG.lineWidth;
+
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x1, y1);
+                    this.ctx.lineTo(x2, y2);
+                    this.ctx.stroke();
+                }
+
+                // Draw points
+                for (let i = 0; i < filteredSteps.length; i++) {
+                    const step = filteredSteps[i];
+                    const x = this.toScreenX(step.o);
+                    const y = this.toScreenY(step.r);
+
+                    this.ctx.fillStyle = CONFIG.colors.point;
+                    this.ctx.beginPath();
+                    this.ctx.arc(x, y, CONFIG.pointRadius, 0, 2 * Math.PI);
+                    this.ctx.fill();
+
+                    // Label start and end
+                    if (i === 0 || i === filteredSteps.length - 1) {
+                        this.ctx.fillStyle = '#fff';
+                        this.ctx.font = 'bold 12px sans-serif';
+                        this.ctx.textAlign = 'center';
+                        this.ctx.fillText(
+                            i === 0 ? `Start (${step.x})` : `End (${step.x})`,
+                            x,
+                            y - 15
+                        );
+                    }
+                }
+            }
+
+            drawOEBlocks(sequence) {
+                const blocks = sequence.findOEBlocks();
+
+                for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
+                    const block = blocks[blockIdx];
+                    const color = CONFIG.colors.blocks[blockIdx % CONFIG.colors.blocks.length];
+
+                    // Block starts at the ODD TERM before the first transition
+                    // Block ends at the ODD TERM after the last E+ step
+                    // blocks overlap by one point: the ending odd term of block N is the starting odd term of block N+1
+                    const startStepIdx = block.start; // Starting odd term
+                    const endStepIdx = block.end + 1; // Ending odd term (last OE index + 1)
+
+                    // Get all points in this block (from starting odd term through ending odd term)
+                    const blockSteps = sequence.steps.slice(startStepIdx, endStepIdx + 1); // +1 because slice end is exclusive
+
+                    if (blockSteps.length < 2) continue;
+
+                    // Find bounding box for this block
+                    const oValues = blockSteps.map(s => s.o);
+                    const rValues = blockSteps.map(s => s.r);
+                    const minO = Math.min(...oValues);
+                    const maxO = Math.max(...oValues);
+                    const minR = Math.min(...rValues);
+                    const maxR = Math.max(...rValues);
+
+                    // Add padding
+                    const padding = 10;
+                    const x1 = this.toScreenX(minO) - padding;
+                    const y1 = this.toScreenY(maxR) - padding;
+                    const width = this.toScreenX(maxO) - this.toScreenX(minO) + padding * 2;
+                    const height = this.toScreenY(minR) - this.toScreenY(maxR) + padding * 2;
+
+                    // Draw semi-transparent box
+                    this.ctx.strokeStyle = color;
+                    this.ctx.lineWidth = 3;
+                    this.ctx.setLineDash([5, 5]);
+                    this.ctx.strokeRect(x1, y1, width, height);
+                    this.ctx.setLineDash([]);
+
+                    // Fill with very transparent color
+                    this.ctx.fillStyle = color + '20'; // Add alpha
+                    this.ctx.fillRect(x1, y1, width, height);
+
+                    // Label the block
+                    this.ctx.fillStyle = color;
+                    this.ctx.font = 'bold 12px sans-serif';
+                    this.ctx.textAlign = 'left';
+                    this.ctx.fillText(block.pattern, x1 + 5, y1 + 15);
+                }
+            }
+
+            drawTooltip(hoveredPoint) {
+                const step = hoveredPoint.step;
+                const sequence = hoveredPoint.sequence;
+
+                const x = this.toScreenX(step.o);
+                const y = this.toScreenY(step.r);
+
+                // Highlight the hovered point
+                this.ctx.fillStyle = '#ffff00';
+                this.ctx.beginPath();
+                this.ctx.arc(x, y, CONFIG.pointRadius + 2, 0, 2 * Math.PI);
+                this.ctx.fill();
+
+                // Find which block this step belongs to
+                const stepIndex = step.n;
+                const blockPattern = sequence.getBlockForStep(stepIndex);
+
+                // Build tooltip text lines
+                const coordsText = `x=${step.x}, o=${step.o}, r=${step.r}, k=${step.k}, j=${step.j}, m=${step.m}`;
+
+                this.ctx.font = '14px sans-serif';
+                const coordsMetrics = this.ctx.measureText(coordsText);
+                const padding = 8;
+                const lineHeight = 18;
+
+                let boxWidth = coordsMetrics.width + padding * 2;
+                let boxHeight = lineHeight + padding * 2;
+
+                // If there's a block pattern, add a line for it
+                if (blockPattern) {
+                    const blockMetrics = this.ctx.measureText(blockPattern);
+                    boxWidth = Math.max(boxWidth, blockMetrics.width + padding * 2);
+                    boxHeight += lineHeight;
+                }
+
+                // Position tooltip above the point, but keep it on screen
+                let tooltipX = x - boxWidth / 2;
+                let tooltipY = y - boxHeight - 15;
+
+                // Keep tooltip within canvas bounds
+                if (tooltipX < 5) tooltipX = 5;
+                if (tooltipX + boxWidth > this.canvas.width - 5) {
+                    tooltipX = this.canvas.width - boxWidth - 5;
+                }
+                if (tooltipY < 5) {
+                    tooltipY = y + 20; // Show below if not enough space above
+                }
+
+                // Draw box background
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+                this.ctx.fillRect(tooltipX, tooltipY, boxWidth, boxHeight);
+
+                // Draw box border
+                this.ctx.strokeStyle = '#ffff00';
+                this.ctx.lineWidth = 1;
+                this.ctx.strokeRect(tooltipX, tooltipY, boxWidth, boxHeight);
+
+                // Draw text
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.font = '14px sans-serif';
+                let currentY = tooltipY + padding + lineHeight / 2;
+
+                // Draw block pattern centered at top (if exists)
+                if (blockPattern) {
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    this.ctx.fillText(blockPattern, tooltipX + boxWidth / 2, currentY);
+                    currentY += lineHeight;
+                }
+
+                // Draw coordinates
+                this.ctx.textAlign = 'left';
+                this.ctx.textBaseline = 'middle';
+                this.ctx.fillText(coordsText, tooltipX + padding, currentY);
+            }
+        }
+
+        // Heatmap renderer for (k, j) distribution
+        class HeatmapRenderer {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.distribution = null;
+            }
+
+            clear() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.distribution = null;
+            }
+
+            render(sequence) {
+                this.distribution = sequence.getKJDistribution();
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                if (this.distribution.length === 0) return;
+
+                // Find bounds
+                const kValues = this.distribution.map(d => d.k);
+                const jValues = this.distribution.map(d => d.j);
+                const counts = this.distribution.map(d => d.count);
+                const minK = Math.min(...kValues);
+                const maxK = Math.max(...kValues);
+                const minJ = Math.min(...jValues);
+                const maxJ = Math.max(...jValues);
+                const maxCount = Math.max(...counts);
+
+                // Add padding
+                const padding = 60;
+                const plotWidth = this.canvas.width - padding * 2;
+                const plotHeight = this.canvas.height - padding * 2;
+
+                // Calculate scale
+                const kRange = maxK - minK || 1;
+                const jRange = maxJ - minJ || 1;
+                const scaleX = plotWidth / kRange;
+                const scaleY = plotHeight / jRange;
+
+                // Helper function to convert k,j to screen coordinates
+                const toScreenX = (k) => padding + (k - minK) * scaleX;
+                const toScreenY = (j) => this.canvas.height - padding - (j - minJ) * scaleY;
+
+                // Draw axes
+                this.ctx.strokeStyle = '#666';
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.moveTo(padding, this.canvas.height - padding);
+                this.ctx.lineTo(this.canvas.width - padding, this.canvas.height - padding);
+                this.ctx.moveTo(padding, this.canvas.height - padding);
+                this.ctx.lineTo(padding, padding);
+                this.ctx.stroke();
+
+                // Draw axis labels
+                this.ctx.fillStyle = '#e0e0e0';
+                this.ctx.font = '16px sans-serif';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('k = v₂(x)', this.canvas.width / 2, this.canvas.height - 10);
+                this.ctx.save();
+                this.ctx.translate(15, this.canvas.height / 2);
+                this.ctx.rotate(-Math.PI / 2);
+                this.ctx.fillText('j = v₂(x+1)', 0, 0);
+                this.ctx.restore();
+
+                // Draw grid lines and labels
+                this.ctx.strokeStyle = '#333';
+                this.ctx.lineWidth = 0.5;
+                this.ctx.font = '12px sans-serif';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillStyle = '#999';
+
+                // K axis ticks
+                for (let k = minK; k <= maxK; k++) {
+                    const x = toScreenX(k);
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, padding);
+                    this.ctx.lineTo(x, this.canvas.height - padding);
+                    this.ctx.stroke();
+                    this.ctx.fillText(k.toString(), x, this.canvas.height - padding + 20);
+                }
+
+                // J axis ticks
+                this.ctx.textAlign = 'right';
+                for (let j = minJ; j <= maxJ; j++) {
+                    const y = toScreenY(j);
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(padding, y);
+                    this.ctx.lineTo(this.canvas.width - padding, y);
+                    this.ctx.stroke();
+                    this.ctx.fillText(j.toString(), padding - 10, y + 4);
+                }
+
+                // Draw bubbles
+                for (const point of this.distribution) {
+                    const x = toScreenX(point.k);
+                    const y = toScreenY(point.j);
+
+                    // Size proportional to count (like matplotlib s=count*20)
+                    const baseRadius = Math.sqrt(point.count * 20);
+                    const radius = Math.min(baseRadius, 50); // Cap maximum size
+
+                    // Color based on count (viridis-like colormap)
+                    const normalized = point.count / maxCount;
+                    const color = this.viridisColor(normalized);
+
+                    // Draw circle
+                    this.ctx.fillStyle = color;
+                    this.ctx.globalAlpha = 0.7;
+                    this.ctx.beginPath();
+                    this.ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                    this.ctx.fill();
+
+                    // Draw border
+                    this.ctx.strokeStyle = '#000';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.globalAlpha = 1.0;
+                    this.ctx.stroke();
+
+                    // Draw count label for larger bubbles
+                    if (radius > 10) {
+                        this.ctx.fillStyle = '#fff';
+                        this.ctx.font = 'bold 12px sans-serif';
+                        this.ctx.textAlign = 'center';
+                        this.ctx.textBaseline = 'middle';
+                        this.ctx.fillText(point.count.toString(), x, y);
+                    }
+                }
+
+                this.ctx.globalAlpha = 1.0;
+
+                // Draw title
+                this.ctx.fillStyle = '#e0e0e0';
+                this.ctx.font = 'bold 16px sans-serif';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText('j = v₂(x+1), k = v₂(x)', this.canvas.width / 2, 25);
+            }
+
+            // Viridis-inspired colormap
+            viridisColor(t) {
+                // Simplified viridis: interpolate between purple, blue, green, yellow
+                t = Math.max(0, Math.min(1, t)); // Clamp to [0,1]
+
+                if (t < 0.25) {
+                    const s = t / 0.25;
+                    return this.rgbToHex(68 + s * (59 - 68), 1 + s * (82 - 1), 84 + s * (139 - 84));
+                } else if (t < 0.5) {
+                    const s = (t - 0.25) / 0.25;
+                    return this.rgbToHex(59 + s * (33 - 59), 82 + s * (145 - 82), 139 + s * (140 - 139));
+                } else if (t < 0.75) {
+                    const s = (t - 0.5) / 0.25;
+                    return this.rgbToHex(33 + s * (94 - 33), 145 + s * (201 - 145), 140 + s * (98 - 140));
+                } else {
+                    const s = (t - 0.75) / 0.25;
+                    return this.rgbToHex(94 + s * (253 - 94), 201 + s * (231 - 201), 98 + s * (37 - 98));
+                }
+            }
+
+            rgbToHex(r, g, b) {
+                r = Math.round(r);
+                g = Math.round(g);
+                b = Math.round(b);
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+        }
+
+        // Main application
+        class Application {
+            constructor() {
+                this.renderer = new LatticeRenderer('latticeCanvas');
+                this.heatmapRenderer = new HeatmapRenderer('heatmapCanvas');
+                this.currentSequence = null;
+                this.loadFromURL();
+            }
+
+            loadFromURL() {
+                // Read x from query string
+                const urlParams = new URLSearchParams(window.location.search);
+                const xParam = urlParams.get('x');
+                if (xParam) {
+                    const x = parseInt(xParam);
+                    if (!isNaN(x) && x > 0) {
+                        document.getElementById('x0Input').value = x;
+                    }
+                }
+            }
+
+            updateURL(x) {
+                // Update URL without reloading the page
+                const url = new URL(window.location);
+                url.searchParams.set('x', x);
+                window.history.pushState({}, '', url);
+            }
+
+            showError(message) {
+                const errorPanel = document.getElementById('errorPanel');
+                errorPanel.textContent = message;
+                errorPanel.style.display = 'block';
+                setTimeout(() => {
+                    errorPanel.style.display = 'none';
+                }, 5000);
+            }
+
+            updateInfo(sequence) {
+                document.getElementById('oeSequence').textContent = sequence.getOEString();
+                document.getElementById('seqLength').textContent = sequence.steps.length - 1; // Exclude start
+
+                // Display OE blocks - each on its own line with initial x value
+                const blocks = sequence.findOEBlocks();
+                if (blocks.length > 0) {
+                    const blockLines = blocks.map((b, i) => {
+                        const startX = sequence.steps[b.start].x;
+                        return `x=${startX}: ${b.pattern}`;
+                    });
+                    document.getElementById('oeBlocks').textContent = blockLines.join('\n');
+                } else {
+                    document.getElementById('oeBlocks').textContent = 'None found';
+                }
+
+                // Verify invariants
+                this.verifyInvariants(sequence);
+            }
+
+            verifyInvariants(sequence) {
+                const distribution = sequence.getKJDistribution();
+                const finalStep = sequence.steps[0]; // Initial step has the final o, r values
+
+                // Invariant 1: sum(count for cells where j=1) should equal o
+                let sumJ1 = 0;
+                for (const point of distribution) {
+                    if (point.j === 1) {
+                        sumJ1 += point.count;
+                    }
+                }
+
+                // Invariant 2: sum(count * (j-2) for cells where k=1) should equal r
+                let sumK1 = 0;
+                for (const point of distribution) {
+                    if (point.k === 1) {
+                        sumK1 += point.count * (point.j - 2);
+                    }
+                }
+
+                console.log('=== Invariant Check ===');
+                console.log(`x0 = ${sequence.x0}`);
+                console.log(`Final o = ${finalStep.o}, r = ${finalStep.r}`);
+                console.log(`Invariant 1: sum(count for j=1) = ${sumJ1}, expected o = ${finalStep.o}, ✓=${sumJ1 === finalStep.o}`);
+                console.log(`Invariant 2: sum(count * (j-2) for k=1) = ${sumK1}, expected r = ${finalStep.r}, ✓=${sumK1 === finalStep.r}`);
+                console.log('Distribution:', distribution);
+            }
+
+            plotSequence() {
+                try {
+                    const x0 = parseInt(document.getElementById('x0Input').value);
+                    if (isNaN(x0) || x0 < 1) {
+                        this.showError('Please enter a valid positive integer');
+                        return;
+                    }
+
+                    const sequence = new CollatzSequence(x0);
+                    this.currentSequence = sequence;
+                    this.renderer.clear();
+                    this.renderer.addSequence(sequence);
+                    this.heatmapRenderer.render(sequence);
+                    this.updateInfo(sequence);
+
+                    // Update URL to reflect current x value
+                    this.updateURL(x0);
+
+                } catch (error) {
+                    this.showError(error.message);
+                    console.error(error);
+                }
+            }
+
+            clearCanvas() {
+                this.renderer.clear();
+                this.heatmapRenderer.clear();
+                this.currentSequence = null;
+                document.getElementById('oeSequence').textContent = '-';
+                document.getElementById('seqLength').textContent = '-';
+                document.getElementById('oeBlocks').textContent = '-';
+            }
+
+            loadExample(x0) {
+                document.getElementById('x0Input').value = x0;
+                this.plotSequence();
+            }
+
+            toggleEvenTerms() {
+                const showEven = document.getElementById('showEvenTerms').checked;
+                this.renderer.showEvenTerms = showEven;
+                this.renderer.fitToView();
+                this.renderer.render();
+            }
+        }
+
+        // Initialize application
+        const app = new Application();
+
+        // Plot default example on load
+        window.addEventListener('load', () => {
+            app.plotSequence();
+        });
+    </script>
+</body>
+</html>

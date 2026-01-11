@@ -1,0 +1,160 @@
+# O-R Lattice Collatz Visualizer
+
+Interactive web-based visualization tool for exploring Collatz sequences on the O-R lattice coordinate system.
+
+## Overview
+
+This single-page application visualizes Collatz sequences using a novel (o,r) coordinate system where:
+- **o** = remaining odd steps to reach 1
+- **r** = 2o - e (where e = remaining even steps)
+
+The O-R lattice provides a natural framework for analyzing Collatz dynamics, revealing geometric patterns and relationships that are less apparent in traditional sequence representations.
+
+## Live Demo
+
+Try the visualizer: [https://wildducktheories.github.io/o-r-lattice-explorer/?x=27](https://wildducktheories.github.io/o-r-lattice-explorer/?x=27)
+
+## Features
+
+### Multi-Layer Rendering System
+
+The visualizer uses a flexible layer-based architecture where each layer can be independently toggled:
+
+- **Grid Layer**: Background lattice grid
+- **Axes Layer**: O-axis (horizontal) and R-axis (vertical) with labels
+- **Path Layer**: Sequence trajectory with semi-transparent gold points
+- **OE Blocks Layer**: Highlights ((OE)+E+) block structures
+- **λₘ Layer**: Plots log₃(m) on right y-axis (red circles, size = γ + 3)
+- **λₓ Layer**: Plots log₂(x) on right y-axis (cyan circles, size = β + 3)
+
+### Theta-Line Reference System
+
+Three parallel reference lines with slope θ = 2 - log₂(3) ≈ 0.4150:
+
+1. **Orange dashed line**: Passes through current lattice point (o,r)
+2. **Red-orange dashed line**: Passes through (0, -log₂(x)) - x-predictor
+3. **Gray dashed line**: Passes through origin - baseline reference
+
+These lines provide bidirectional estimation:
+- Line 2: Given x, predict where lattice points should fall
+- Line 1: Given (o,r), estimate x from where the line intersects the r-axis
+- The deviation between predictions is quantified by the error term ε
+
+### Interactive Tooltips
+
+Hover over any lattice point to see detailed information:
+
+**Lattice Coordinates:**
+- o, r, e values
+
+**Element Properties:**
+- x value with factorization: x = 2^α·3^γ·m - 1
+- λₓ = log₂(x)
+
+**Derived Parameters:**
+- α = v₂(x+1): 2-adic valuation determining upward growth
+- γ = v₃(x+1): 3-adic valuation
+- m = (x+1)/(2^α·3^γ): reduced multiplier
+- λₘ = log₃(m)
+- β = v₂(x) or v₂(3x+1): determines downward decay
+- d = 2^(2o-r) - 3^o
+- k = 2^e - 3^o·x
+- λₖ = log₂(k)
+
+**Theta-Line Analysis:**
+- θ = 2 - log₂(3)
+- c_{o,r} = θ·o - r: intercept through lattice point
+- c_x = log₂(x): intercept through x-predictor
+- L = c_{o,r}/√(1+θ²): normal distance from origin line
+- ε = (c_{o,r} - c_x)/√(1+θ²): error between predictions
+
+## Mathematical Background
+
+### The O-R Coordinate System
+
+For a value x in a Collatz sequence:
+- **o**: Number of odd steps remaining to reach 1
+- **e**: Number of even steps remaining to reach 1
+- **r**: Defined as r = 2o - e
+
+This coordinate system transforms the chaotic-appearing Collatz sequence into structured trajectories on the (o,r) lattice.
+
+### Greek Letter Variables
+
+To avoid notation conflicts, we use:
+- **α (alpha)** = v₂(x+1): Controls upward growth
+- **γ (gamma)** = v₃(x+1): Neutral to growth/decay
+- **β (beta)** = v₂(x) or v₂(3x+1): Controls downward decay
+
+### Theta-Line Relationship
+
+The slope θ = 2 - log₂(3) ≈ 0.4150 emerges from the fundamental Collatz operations:
+- Odd step: x → 3x+1 (multiply by 3, add 1)
+- Even steps: x → x/2^β (divide by power of 2)
+
+The lines θ·o - r = c provide:
+- **c_{o,r}**: Where the actual point lies
+- **c_x**: Where x predicts the point should lie
+- **L**: Signed distance from origin
+- **ε**: Error due to k ≠ 0
+
+Since k = 2^e - 3^o·x is non-zero (except at convergence), there's always an error term causing the actual trajectory to deviate from the ideal θ-slope prediction.
+
+## Usage
+
+1. **Load a sequence**: Enter a starting value x₀ and click "Plot Sequence"
+2. **Toggle layers**: Use checkboxes to show/hide different visualizations
+3. **Explore points**: Hover over lattice points to see detailed analysis
+4. **View examples**: Click example buttons to load interesting sequences (27, 31, 63, 127, 70055, 77031)
+
+### Keyboard Controls
+
+- **Show even terms**: Toggle to display all even x values (default: only shows odd values and critical even points)
+
+## Technical Details
+
+### Single-File Application
+
+The entire application is contained in `index.html` with no external dependencies:
+- Vanilla JavaScript (no frameworks)
+- HTML5 Canvas for rendering
+- No build process required
+
+### Layer Architecture
+
+Each layer extends a base `Layer` class with:
+- `render(ctx, sequences, latticeTransform, rightAxisTransform)`: Rendering logic
+- `enabled`: Toggle visibility
+- `usesRightAxis`: Whether layer uses right y-axis scaling
+
+Right-axis layers automatically coordinate their bounds and share the same axis.
+
+### Coordinate Transformations
+
+The renderer maintains transforms between:
+- **Lattice coordinates** (o, r): Mathematical space
+- **Screen coordinates** (x, y): Canvas pixels
+- **Right-axis values** (λₘ, λₓ): Additional data dimensions
+
+## Browser Compatibility
+
+Works in all modern browsers with HTML5 Canvas support:
+- Chrome/Edge (recommended)
+- Firefox
+- Safari
+
+## Development
+
+See `CLAUDE.md` for detailed development notes, coordinate system conventions, and implementation lessons learned.
+
+## References
+
+Based on research exploring Collatz-type sequences through lattice-based coordinate systems.
+
+## Screenshot
+
+<!-- Screenshot will be added here -->
+
+## License
+
+[To be determined]

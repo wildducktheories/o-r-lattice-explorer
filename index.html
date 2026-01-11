@@ -810,7 +810,7 @@
         }
 
         // X Value layer - plots at (o, -log₂(x)) on left axis with β as circle size
-        // and draws horizontal line to theta slope intersection
+        // and draws L-shaped lines: vertical from (o,r) down, horizontal from (o,r)-estimator
         class XValueLayer extends Layer {
             constructor(enabled = true) {
                 super('X Values', enabled);
@@ -832,8 +832,8 @@
                     const negLogX = -highlightStep.lambda_x;
 
                     // Find intersection of horizontal line at r = -log₂(x)
-                    // with theta slope line through (o, r)
-                    // Theta line: r_line = θ·(o_point - o) + r
+                    // with x-estimator (theta slope line through (o, r))
+                    // x-estimator: r_line = θ·(o_point - o) + r
                     // Horizontal: r_line = -log₂(x)
                     // Intersection: o_int = o + (-log₂(x) - r)/θ
                     const o_int = o + (negLogX - r) / theta;
@@ -1257,8 +1257,8 @@
                 minO = Math.floor(minO) - 2;
                 maxO = Math.ceil(maxO) + 2;
 
-                // Line 1: Passes through (o_ref, r_ref)
-                // r = theta * o + (r_ref - theta * o_ref)
+                // Line 1: x-estimator - passes through (o_ref, r_ref)
+                // Given (o,r), estimates x from r-axis intercept
                 const c1 = refStep.r - theta * refStep.o;
                 const r1_start = theta * minO + c1;
                 const r1_end = theta * maxO + c1;
@@ -1271,8 +1271,8 @@
                 this.ctx.lineTo(this.toScreenX(maxO), this.toScreenY(r1_end));
                 this.ctx.stroke();
 
-                // Line 2: Passes through (0, -log_2(x_ref))
-                // r = theta * o - log_2(x)
+                // Line 2: (o,r)-estimator - passes through (0, -log_2(x_ref))
+                // Given x, estimates where (o,r) should fall
                 const c2 = -Math.log2(refStep.x);
                 const r2_start = theta * minO + c2;
                 const r2_end = theta * maxO + c2;

@@ -34,14 +34,14 @@ The visualizer uses a flexible layer-based architecture where each layer can be 
 
 Three parallel reference lines with slope θ = 2 - log₂(3) ≈ 0.4150:
 
-1. **Orange dashed line**: Passes through current lattice point (o,r)
-2. **Red-orange dashed line**: Passes through (0, -log₂(x)) - x-predictor
+1. **Orange dashed line**: Passes through current lattice point (o,r) - x-estimator
+2. **Red-orange dashed line**: Passes through (0, -log₂(x)) - (o,r)-estimator
 3. **Gray dashed line**: Passes through origin - baseline reference
 
 These lines provide bidirectional estimation:
-- Line 2: Given x, predict where lattice points should fall
-- Line 1: Given (o,r), estimate x from where the line intersects the r-axis
-- The deviation between predictions is quantified by the error term ε
+- Line 2 (o,r)-estimator: Given x, estimate where lattice points should fall
+- Line 1 x-estimator: Given (o,r), estimate x from where the line intersects the r-axis
+- The deviation between estimators is quantified by the error term ε
 
 ### Interactive Tooltips
 
@@ -66,10 +66,10 @@ Hover over any lattice point to see detailed information:
 
 **Theta-Line Analysis:**
 - θ = 2 - log₂(3)
-- cₒ,ᵣ = θ·o - r: intercept through lattice point
-- cₓ = log₂(x): intercept through x-predictor
+- cₒ,ᵣ = θ·o - r: intercept of x-estimator (through lattice point)
+- cₓ = log₂(x): intercept of (o,r)-estimator
 - L = cₒ,ᵣ/√(1+θ²): normal distance from origin line
-- ε = (cₒ,ᵣ - cₓ)/√(1+θ²): error between predictions
+- ε = (cₒ,ᵣ - cₓ)/√(1+θ²): error between estimators
 
 ### Starting Value Info Panel
 
@@ -104,12 +104,12 @@ The slope θ = 2 - log₂(3) ≈ 0.4150 emerges from the fundamental Collatz ope
 - Even steps: x → x/2^β (divide by power of 2)
 
 The lines θ·o - r = c provide:
-- **cₒ,ᵣ**: Where the actual point lies
-- **cₓ**: Where x predicts the point should lie
+- **cₒ,ᵣ**: Intercept of x-estimator (where the actual lattice point lies)
+- **cₓ**: Intercept of (o,r)-estimator (where x estimates the point should lie)
 - **L**: Signed distance from origin
 - **ε**: Error due to k ≠ 0
 
-Since k = 2^e - 3^o·x is non-zero (except at convergence), there's always an error term causing the actual trajectory to deviate from the ideal θ-slope prediction.
+Since k = 2^e - 3^o·x is non-zero (except at convergence), there's always an error term causing the actual trajectory to deviate from the ideal θ-slope estimation.
 
 ## Usage
 

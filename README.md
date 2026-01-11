@@ -148,7 +148,12 @@ where:
 3. **Explore points**: Hover over lattice points to see detailed analysis
 4. **Navigate sequences**: Double-click any lattice point to load its sequence
    - Browser history is updated, allowing back/forward navigation between sequences
-5. **View examples**: Click example buttons to load interesting sequences (27, 31, 63, 127, 70055, 77031)
+5. **Animate transformation**: Click "Animate to λₓ" to smoothly morph the lattice view
+   - Points transform from (o, r) to (o, -log₂(x)) positions
+   - Button only visible when λₓ layer is enabled
+   - Click again to animate back to (o, r) view
+   - 1.5 second smooth animation with easing
+6. **View examples**: Click example buttons to load interesting sequences (27, 31, 63, 127, 70055, 77031)
 
 ### Keyboard Controls
 

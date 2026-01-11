@@ -239,9 +239,9 @@
         </div>
 
         <div class="canvas-container">
-            <h2 style="color: #4a9eff; margin-bottom: 15px;">Heatmap: (k, j) Distribution</h2>
+            <h2 style="color: #4a9eff; margin-bottom: 15px;">Heatmap: (α, β) Distribution</h2>
             <div style="color: #999; margin-bottom: 10px; font-size: 0.9em;">
-                For odd x: j = v₂(x+1), k = v₂(3x+1)
+                For odd x: α = v₂(x+1), β = v₂(3x+1)
             </div>
             <canvas id="heatmapCanvas" width="800" height="600"></canvas>
         </div>
@@ -249,7 +249,7 @@
         <div class="canvas-container">
             <h2 style="color: #4a9eff; margin-bottom: 15px;">m vs o Plot</h2>
             <div style="color: #999; margin-bottom: 10px; font-size: 0.9em;">
-                For odd x: m = (x+1)/(2^j · 3^i) plotted against o (remaining odd steps), with i = v₃(x+1). Circle size = (i+1).
+                For odd x: m = (x+1)/(2^α · 3^γ) plotted against o (remaining odd steps), with γ = v₃(x+1). Circle size = (γ+3).
             </div>
             <canvas id="mPlotCanvas" width="800" height="600"></canvas>
         </div>
@@ -312,30 +312,30 @@
                     throw new Error(`Sequence did not reach 1 within ${CONFIG.maxIterations} iterations`);
                 }
 
-                // Now compute o, e, r, k, j backwards from x=1 (where o=0, e=0)
+                // Now compute o, e, r, α, β, γ backwards from x=1 (where o=0, e=0)
                 // Start from the end and work backwards
                 for (let i = tempSteps.length - 1; i >= 0; i--) {
                     const currentX = tempSteps[i].x;
 
-                    // Compute j = v_2(x+1) - power of 2 dividing (x+1)
-                    tempSteps[i].j = this.v2(currentX + 1);
+                    // Compute α = v_2(x+1) - power of 2 dividing (x+1) - determines upward growth
+                    tempSteps[i].alpha = this.v2(currentX + 1);
 
-                    // Compute i = v_3(x+1) - power of 3 dividing (x+1)
-                    tempSteps[i].i = this.v3(currentX + 1);
+                    // Compute γ = v_3(x+1) - power of 3 dividing (x+1) - neutral to growth/decay
+                    tempSteps[i].gamma = this.v3(currentX + 1);
 
-                    // Compute m = (x+1) / (2^j * 3^i)
-                    tempSteps[i].m = (currentX + 1) / (Math.pow(2, tempSteps[i].j) * Math.pow(3, tempSteps[i].i));
+                    // Compute m = (x+1) / (2^α * 3^γ)
+                    tempSteps[i].m = (currentX + 1) / (Math.pow(2, tempSteps[i].alpha) * Math.pow(3, tempSteps[i].gamma));
 
                     // Compute lambda_x = log_2(x) and lambda_m = log_3(m)
                     tempSteps[i].lambda_x = Math.log2(currentX);
                     tempSteps[i].lambda_m = Math.log(tempSteps[i].m) / Math.log(3);
 
                     if (i === tempSteps.length - 1) {
-                        // At x=1: o=0, e=0, k=0
+                        // At x=1: o=0, e=0, β=0
                         tempSteps[i].o = 0;
                         tempSteps[i].e = 0;
                         tempSteps[i].r = 0;
-                        tempSteps[i].k = 0;
+                        tempSteps[i].beta = 0;
                         tempSteps[i].n = i;
                     } else {
                         // Get successor (next step in forward direction)
@@ -346,12 +346,12 @@
                         if (currentX % 2 === 1) {
                             tempSteps[i].o = successor.o + 1;
                             tempSteps[i].e = successor.e;
-                            tempSteps[i].k = successor.k;
+                            tempSteps[i].beta = successor.beta;
                         } else {
                             tempSteps[i].o = successor.o;
                             tempSteps[i].e = successor.e + 1;
-                            // k = v_2(x) for even x
-                            tempSteps[i].k = this.v2(currentX);
+                            // β = v_2(x) for even x - determines downward decay
+                            tempSteps[i].beta = this.v2(currentX);
                         }
 
                         tempSteps[i].r = 2 * tempSteps[i].o - tempSteps[i].e;
@@ -447,23 +447,23 @@
                 return blocks;
             }
 
-            getKJDistribution() {
-                // Count occurrences of each (k, j) pair for ODD x values only
+            getAlphaBetaDistribution() {
+                // Count occurrences of each (β, α) pair for ODD x values only
                 const counts = new Map();
 
                 for (const step of this.steps) {
                     // Only include odd x values (matching Python: if s.x%2==1)
                     if (step.x % 2 === 1) {
-                        const key = `${step.k},${step.j}`;
+                        const key = `${step.beta},${step.alpha}`;
                         counts.set(key, (counts.get(key) || 0) + 1);
                     }
                 }
 
-                // Convert to array of {k, j, count}
+                // Convert to array of {beta, alpha, count}
                 const distribution = [];
                 for (const [key, count] of counts.entries()) {
-                    const [k, j] = key.split(',').map(Number);
-                    distribution.push({ k, j, count });
+                    const [beta, alpha] = key.split(',').map(Number);
+                    distribution.push({ beta, alpha, count });
                 }
 
                 return distribution;
@@ -883,16 +883,16 @@
                 lines.push(`e = ${step.e}`);
 
                 // Element
-                lines.push(`x = 2^j·3^i·m - 1`);
+                lines.push(`x = 2^α·3^γ·m - 1`);
                 lines.push(`x = ${step.x}`);
                 lines.push(`λₓ = log₂(x) = ${step.lambda_x.toFixed(3)}`);
 
                 // Derived parameters (in derivation order)
-                lines.push(`j = v₂(x+1) = ${step.j}`);
-                lines.push(`i = v₃(x+1) = ${step.i}`);
-                lines.push(`m = (x+1)/(2^j·3^i) = ${step.m}`);
+                lines.push(`α = v₂(x+1) = ${step.alpha}`);
+                lines.push(`γ = v₃(x+1) = ${step.gamma}`);
+                lines.push(`m = (x+1)/(2^α·3^γ) = ${step.m}`);
                 lines.push(`λₘ = log₃(m) = ${step.lambda_m.toFixed(3)}`);
-                lines.push(`k = v₂(${step.x % 2 === 0 ? 'x' : '3x+1'}) = ${step.k}`);
+                lines.push(`β = v₂(${step.x % 2 === 0 ? 'x' : '3x+1'}) = ${step.beta}`);
                 lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
 
                 this.ctx.font = '14px monospace';
@@ -954,7 +954,7 @@
             }
         }
 
-        // Heatmap renderer for (k, j) distribution
+        // Heatmap renderer for (β, α) distribution
         class HeatmapRenderer {
             constructor(canvasId) {
                 this.canvas = document.getElementById(canvasId);
@@ -968,19 +968,19 @@
             }
 
             render(sequence) {
-                this.distribution = sequence.getKJDistribution();
+                this.distribution = sequence.getAlphaBetaDistribution();
                 this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
                 if (this.distribution.length === 0) return;
 
                 // Find bounds
-                const kValues = this.distribution.map(d => d.k);
-                const jValues = this.distribution.map(d => d.j);
+                const betaValues = this.distribution.map(d => d.beta);
+                const alphaValues = this.distribution.map(d => d.alpha);
                 const counts = this.distribution.map(d => d.count);
-                const minK = Math.min(...kValues);
-                const maxK = Math.max(...kValues);
-                const minJ = Math.min(...jValues);
-                const maxJ = Math.max(...jValues);
+                const minBeta = Math.min(...betaValues);
+                const maxBeta = Math.max(...betaValues);
+                const minAlpha = Math.min(...alphaValues);
+                const maxAlpha = Math.max(...alphaValues);
                 const maxCount = Math.max(...counts);
 
                 // Add padding
@@ -988,15 +988,15 @@
                 const plotWidth = this.canvas.width - padding * 2;
                 const plotHeight = this.canvas.height - padding * 2;
 
-                // Calculate scale
-                const kRange = maxK - minK || 1;
-                const jRange = maxJ - minJ || 1;
-                const scaleX = plotWidth / kRange;
-                const scaleY = plotHeight / jRange;
+                // Calculate scale - α on x-axis, β on y-axis
+                const alphaRange = maxAlpha - minAlpha || 1;
+                const betaRange = maxBeta - minBeta || 1;
+                const scaleX = plotWidth / alphaRange;
+                const scaleY = plotHeight / betaRange;
 
-                // Helper function to convert k,j to screen coordinates
-                const toScreenX = (k) => padding + (k - minK) * scaleX;
-                const toScreenY = (j) => this.canvas.height - padding - (j - minJ) * scaleY;
+                // Helper function to convert α,β to screen coordinates
+                const toScreenX = (alpha) => padding + (alpha - minAlpha) * scaleX;
+                const toScreenY = (beta) => this.canvas.height - padding - (beta - minBeta) * scaleY;
 
                 // Draw axes
                 this.ctx.strokeStyle = '#666';
@@ -1012,11 +1012,11 @@
                 this.ctx.fillStyle = '#e0e0e0';
                 this.ctx.font = '16px sans-serif';
                 this.ctx.textAlign = 'center';
-                this.ctx.fillText('k = v₂(x)', this.canvas.width / 2, this.canvas.height - 10);
+                this.ctx.fillText('α = v₂(x+1)', this.canvas.width / 2, this.canvas.height - 10);
                 this.ctx.save();
                 this.ctx.translate(15, this.canvas.height / 2);
                 this.ctx.rotate(-Math.PI / 2);
-                this.ctx.fillText('j = v₂(x+1)', 0, 0);
+                this.ctx.fillText('β = v₂(x)', 0, 0);
                 this.ctx.restore();
 
                 // Draw grid lines and labels
@@ -1026,31 +1026,31 @@
                 this.ctx.textAlign = 'center';
                 this.ctx.fillStyle = '#999';
 
-                // K axis ticks
-                for (let k = minK; k <= maxK; k++) {
-                    const x = toScreenX(k);
+                // α axis ticks (x-axis)
+                for (let alpha = minAlpha; alpha <= maxAlpha; alpha++) {
+                    const x = toScreenX(alpha);
                     this.ctx.beginPath();
                     this.ctx.moveTo(x, padding);
                     this.ctx.lineTo(x, this.canvas.height - padding);
                     this.ctx.stroke();
-                    this.ctx.fillText(k.toString(), x, this.canvas.height - padding + 20);
+                    this.ctx.fillText(alpha.toString(), x, this.canvas.height - padding + 20);
                 }
 
-                // J axis ticks
+                // β axis ticks (y-axis)
                 this.ctx.textAlign = 'right';
-                for (let j = minJ; j <= maxJ; j++) {
-                    const y = toScreenY(j);
+                for (let beta = minBeta; beta <= maxBeta; beta++) {
+                    const y = toScreenY(beta);
                     this.ctx.beginPath();
                     this.ctx.moveTo(padding, y);
                     this.ctx.lineTo(this.canvas.width - padding, y);
                     this.ctx.stroke();
-                    this.ctx.fillText(j.toString(), padding - 10, y + 4);
+                    this.ctx.fillText(beta.toString(), padding - 10, y + 4);
                 }
 
                 // Draw bubbles
                 for (const point of this.distribution) {
-                    const x = toScreenX(point.k);
-                    const y = toScreenY(point.j);
+                    const x = toScreenX(point.alpha);
+                    const y = toScreenY(point.beta);
 
                     // Size proportional to count (like matplotlib s=count*20)
                     const baseRadius = Math.sqrt(point.count * 20);
@@ -1089,7 +1089,7 @@
                 this.ctx.fillStyle = '#e0e0e0';
                 this.ctx.font = 'bold 16px sans-serif';
                 this.ctx.textAlign = 'center';
-                this.ctx.fillText('j = v₂(x+1), k = v₂(x)', this.canvas.width / 2, 25);
+                this.ctx.fillText('(α, β) Distribution', this.canvas.width / 2, 25);
             }
 
             // Viridis-inspired colormap
@@ -1134,11 +1134,11 @@
             }
 
             render(sequence) {
-                // Extract (o, m, i) tuples for odd x values only
+                // Extract (o, m, γ) tuples for odd x values only
                 this.data = [];
                 for (const step of sequence.steps) {
                     if (step.x % 2 === 1) {
-                        this.data.push({ o: step.o, m: step.m, i: step.i });
+                        this.data.push({ o: step.o, m: step.m, gamma: step.gamma });
                     }
                 }
 
@@ -1187,7 +1187,7 @@
                 this.ctx.save();
                 this.ctx.translate(15, this.canvas.height / 2);
                 this.ctx.rotate(-Math.PI / 2);
-                this.ctx.fillText('m = (x+1)/(2^j · 3^i)', 0, 0);
+                this.ctx.fillText('m = (x+1)/(2^α · 3^γ)', 0, 0);
                 this.ctx.restore();
 
                 // Draw grid lines
@@ -1229,8 +1229,8 @@
                     const x = toScreenX(point.o);
                     const y = toScreenY(point.m);
 
-                    // i=0 → 3 pixels, i=1 → 4 pixels, i=2 → 5 pixels, etc.
-                    const radius = point.i + 3;
+                    // γ=0 → 3 pixels, γ=1 → 4 pixels, γ=2 → 5 pixels, etc.
+                    const radius = point.gamma + 3;
 
                     this.ctx.beginPath();
                     this.ctx.arc(x, y, radius, 0, 2 * Math.PI);
@@ -1305,30 +1305,30 @@
             }
 
             verifyInvariants(sequence) {
-                const distribution = sequence.getKJDistribution();
+                const distribution = sequence.getAlphaBetaDistribution();
                 const finalStep = sequence.steps[0]; // Initial step has the final o, r values
 
-                // Invariant 1: sum(count for cells where j=1) should equal o
-                let sumJ1 = 0;
+                // Invariant 1: sum(count for cells where α=1) should equal o
+                let sumAlpha1 = 0;
                 for (const point of distribution) {
-                    if (point.j === 1) {
-                        sumJ1 += point.count;
+                    if (point.alpha === 1) {
+                        sumAlpha1 += point.count;
                     }
                 }
 
-                // Invariant 2: sum(count * (j-2) for cells where k=1) should equal r
-                let sumK1 = 0;
+                // Invariant 2: sum(count * (α-2) for cells where β=1) should equal r
+                let sumBeta1 = 0;
                 for (const point of distribution) {
-                    if (point.k === 1) {
-                        sumK1 += point.count * (point.j - 2);
+                    if (point.beta === 1) {
+                        sumBeta1 += point.count * (point.alpha - 2);
                     }
                 }
 
                 console.log('=== Invariant Check ===');
                 console.log(`x0 = ${sequence.x0}`);
                 console.log(`Final o = ${finalStep.o}, r = ${finalStep.r}`);
-                console.log(`Invariant 1: sum(count for j=1) = ${sumJ1}, expected o = ${finalStep.o}, ✓=${sumJ1 === finalStep.o}`);
-                console.log(`Invariant 2: sum(count * (j-2) for k=1) = ${sumK1}, expected r = ${finalStep.r}, ✓=${sumK1 === finalStep.r}`);
+                console.log(`Invariant 1: sum(count for α=1) = ${sumAlpha1}, expected o = ${finalStep.o}, ✓=${sumAlpha1 === finalStep.o}`);
+                console.log(`Invariant 2: sum(count * (α-2) for β=1) = ${sumBeta1}, expected r = ${finalStep.r}, ✓=${sumBeta1 === finalStep.r}`);
                 console.log('Distribution:', distribution);
             }
 

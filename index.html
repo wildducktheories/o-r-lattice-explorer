@@ -326,6 +326,10 @@
                     // Compute m = (x+1) / (2^j * 3^i)
                     tempSteps[i].m = (currentX + 1) / (Math.pow(2, tempSteps[i].j) * Math.pow(3, tempSteps[i].i));
 
+                    // Compute lambda_x = log_2(x) and lambda_m = log_3(m)
+                    tempSteps[i].lambda_x = Math.log2(currentX);
+                    tempSteps[i].lambda_m = Math.log(tempSteps[i].m) / Math.log(3);
+
                     if (i === tempSteps.length - 1) {
                         // At x=1: o=0, e=0, k=0
                         tempSteps[i].o = 0;
@@ -353,6 +357,9 @@
                         tempSteps[i].r = 2 * tempSteps[i].o - tempSteps[i].e;
                         tempSteps[i].n = i;
                     }
+
+                    // Compute d = 2^(2o-r) - 3^o (after o and r are set)
+                    tempSteps[i].d = Math.pow(2, 2 * tempSteps[i].o - tempSteps[i].r) - Math.pow(3, tempSteps[i].o);
                 }
 
                 this.steps = tempSteps;
@@ -876,14 +883,17 @@
                 lines.push(`e = ${step.e}`);
 
                 // Element
-                lines.push(`x = ${step.x}`);
                 lines.push(`x = 2^j·3^i·m - 1`);
+                lines.push(`x = ${step.x}`);
+                lines.push(`λₓ = log₂(x) = ${step.lambda_x.toFixed(3)}`);
 
                 // Derived parameters (in derivation order)
                 lines.push(`j = v₂(x+1) = ${step.j}`);
                 lines.push(`i = v₃(x+1) = ${step.i}`);
                 lines.push(`m = (x+1)/(2^j·3^i) = ${step.m}`);
+                lines.push(`λₘ = log₃(m) = ${step.lambda_m.toFixed(3)}`);
                 lines.push(`k = v₂(${step.x % 2 === 0 ? 'x' : '3x+1'}) = ${step.k}`);
+                lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
 
                 this.ctx.font = '14px monospace';
                 const padding = 10;

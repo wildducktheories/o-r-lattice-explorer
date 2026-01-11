@@ -148,10 +148,12 @@ where:
 3. **Explore points**: Hover over lattice points to see detailed analysis
 4. **Navigate sequences**: Double-click any lattice point to load its sequence
    - Browser history is updated, allowing back/forward navigation between sequences
-5. **Animate transformation**: Click "Animate to λₓ" to smoothly morph the lattice view
-   - Points transform from (o, r) to (o, -log₂(x)) positions
+5. **Animate transformation**: Click "Animate to λₓ" to visualize the geometric relationship
+   - Original gold points remain at (o, r) positions
+   - Animated copy morphs from gold to green as it moves to (o, -log₂(x))
+   - Shows both representations simultaneously during animation
    - Button only visible when λₓ layer is enabled
-   - Click again to animate back to (o, r) view
+   - Click again to animate back (green fades to gold, points return to (o, r))
    - 1.5 second smooth animation with easing
 6. **View examples**: Click example buttons to load interesting sequences (27, 31, 63, 127, 70055, 77031)
 

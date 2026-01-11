@@ -714,19 +714,22 @@
             }
 
             render(ctx, sequences, latticeTransform) {
+                const t = latticeTransform.animationT || 0;
+
                 for (const sequence of sequences) {
                     // Get visible steps
                     const filteredSteps = latticeTransform.getVisibleSteps(sequence);
 
+                    // Always draw original lattice at (o, r) in gold
                     // Draw edges
                     for (let i = 0; i < filteredSteps.length - 1; i++) {
                         const curr = filteredSteps[i];
                         const next = filteredSteps[i + 1];
 
                         const x1 = latticeTransform.toScreenX(curr.o);
-                        const y1 = latticeTransform.toScreenY(latticeTransform.getAnimatedY(curr));
+                        const y1 = latticeTransform.toScreenY(curr.r);
                         const x2 = latticeTransform.toScreenX(next.o);
-                        const y2 = latticeTransform.toScreenY(latticeTransform.getAnimatedY(next));
+                        const y2 = latticeTransform.toScreenY(next.r);
 
                         ctx.strokeStyle = next.type === 'O' ? CONFIG.colors.oddStep : CONFIG.colors.evenStep;
                         ctx.lineWidth = CONFIG.lineWidth;
@@ -737,11 +740,11 @@
                         ctx.stroke();
                     }
 
-                    // Draw points
+                    // Draw original points
                     for (let i = 0; i < filteredSteps.length; i++) {
                         const step = filteredSteps[i];
                         const x = latticeTransform.toScreenX(step.o);
-                        const y = latticeTransform.toScreenY(latticeTransform.getAnimatedY(step));
+                        const y = latticeTransform.toScreenY(step.r);
 
                         ctx.fillStyle = 'rgba(255, 215, 0, 0.6)';  // Semi-transparent gold
                         ctx.beginPath();
@@ -758,6 +761,46 @@
                                 x,
                                 y - 15
                             );
+                        }
+                    }
+
+                    // If animating, draw animated copy morphing to (o, -log₂(x)) with color change
+                    if (t > 0) {
+                        // Interpolate color from gold to green
+                        const r = Math.round(255 * (1 - t) + 50 * t);
+                        const g = Math.round(215 * (1 - t) + 205 * t);
+                        const b = Math.round(0 * (1 - t) + 50 * t);
+                        const alpha = 0.6 * (1 - t) + 0.5 * t;
+
+                        // Draw animated edges
+                        for (let i = 0; i < filteredSteps.length - 1; i++) {
+                            const curr = filteredSteps[i];
+                            const next = filteredSteps[i + 1];
+
+                            const x1 = latticeTransform.toScreenX(curr.o);
+                            const y1 = latticeTransform.toScreenY(latticeTransform.getAnimatedY(curr));
+                            const x2 = latticeTransform.toScreenX(next.o);
+                            const y2 = latticeTransform.toScreenY(latticeTransform.getAnimatedY(next));
+
+                            ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                            ctx.lineWidth = CONFIG.lineWidth;
+
+                            ctx.beginPath();
+                            ctx.moveTo(x1, y1);
+                            ctx.lineTo(x2, y2);
+                            ctx.stroke();
+                        }
+
+                        // Draw animated points
+                        for (let i = 0; i < filteredSteps.length; i++) {
+                            const step = filteredSteps[i];
+                            const x = latticeTransform.toScreenX(step.o);
+                            const y = latticeTransform.toScreenY(latticeTransform.getAnimatedY(step));
+
+                            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                            ctx.beginPath();
+                            ctx.arc(x, y, CONFIG.pointRadius, 0, 2 * Math.PI);
+                            ctx.fill();
                         }
                     }
                 }
@@ -1253,7 +1296,8 @@
                     getVisibleSteps: this.getVisibleSteps.bind(this),
                     hoveredPoint: this.hoveredPoint,
                     defaultStep: this.sequences.length > 0 ? this.sequences[0].steps[0] : null,
-                    getAnimatedY: this.getAnimatedY.bind(this)
+                    getAnimatedY: this.getAnimatedY.bind(this),
+                    animationT: this.currentEasedT || 0
                 };
 
                 // Create right axis transform if needed

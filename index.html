@@ -201,6 +201,14 @@
                     Show even terms on lattice
                 </label>
             </div>
+            <div class="control-row">
+                <label>Layers:</label>
+                <label><input type="checkbox" id="layerGrid" checked onchange="app.toggleLayer('Grid')"> Grid</label>
+                <label><input type="checkbox" id="layerAxes" checked onchange="app.toggleLayer('Axes')"> Axes</label>
+                <label><input type="checkbox" id="layerPath" checked onchange="app.toggleLayer('Path')"> Path</label>
+                <label><input type="checkbox" id="layerBlocks" checked onchange="app.toggleLayer('OE Blocks')"> OE Blocks</label>
+                <label><input type="checkbox" id="layerMValue" onchange="app.toggleLayer('M Values')"> m-layer</label>
+            </div>
         </div>
 
         <div id="errorPanel" class="error" style="display: none;"></div>
@@ -214,7 +222,7 @@
                 </div>
                 <div class="legend-item">
                     <div class="legend-color" style="background: #4a9eff;"></div>
-                    <span>E step x/2^k (divide out all 2s): moves (o,r) → (o, r+k-2)</span>
+                    <span>E step x/2^β (divide out all 2s): moves (o,r) → (o, r+β-2)</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-color" style="background: linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #00ff00); border: 2px dashed #fff;"></div>
@@ -246,13 +254,6 @@
             <canvas id="heatmapCanvas" width="800" height="600"></canvas>
         </div>
 
-        <div class="canvas-container">
-            <h2 style="color: #4a9eff; margin-bottom: 15px;">m vs o Plot</h2>
-            <div style="color: #999; margin-bottom: 10px; font-size: 0.9em;">
-                For odd x: m = (x+1)/(2^α · 3^γ) plotted against o (remaining odd steps), with γ = v₃(x+1). Circle size = (γ+3).
-            </div>
-            <canvas id="mPlotCanvas" width="800" height="600"></canvas>
-        </div>
     </div>
 
     <script>
@@ -511,6 +512,295 @@
             }
         }
 
+        // Base Layer class for rendering system
+        class Layer {
+            constructor(name, enabled = true) {
+                this.name = name;
+                this.enabled = enabled;
+                this.usesRightAxis = false;
+                this.rightAxisLabel = '';
+            }
+
+            render(ctx, sequences, latticeTransform, rightAxisTransform = null) {
+                // Override in subclasses
+            }
+
+            getRightAxisBounds(sequences) {
+                // Override if usesRightAxis = true
+                return null;
+            }
+        }
+
+        // Grid layer - background grid lines
+        class GridLayer extends Layer {
+            constructor(enabled = true) {
+                super('Grid', enabled);
+            }
+
+            render(ctx, sequences, latticeTransform) {
+                if (sequences.length === 0) return;
+
+                // Calculate bounds from visible steps
+                let minO = Infinity, maxO = -Infinity;
+                let minR = Infinity, maxR = -Infinity;
+
+                for (const seq of sequences) {
+                    const visibleSteps = latticeTransform.getVisibleSteps(seq);
+                    for (const step of visibleSteps) {
+                        minO = Math.min(minO, step.o);
+                        maxO = Math.max(maxO, step.o);
+                        minR = Math.min(minR, step.r);
+                        maxR = Math.max(maxR, step.r);
+                    }
+                }
+
+                minO = Math.floor(minO) - 2;
+                maxO = Math.ceil(maxO) + 2;
+                minR = Math.floor(minR) - 2;
+                maxR = Math.ceil(maxR) + 2;
+
+                ctx.strokeStyle = CONFIG.colors.grid;
+                ctx.lineWidth = 0.5;
+
+                // Vertical grid lines (constant o)
+                for (let o = minO; o <= maxO; o++) {
+                    const x = latticeTransform.toScreenX(o);
+                    ctx.beginPath();
+                    ctx.moveTo(x, latticeTransform.toScreenY(minR));
+                    ctx.lineTo(x, latticeTransform.toScreenY(maxR));
+                    ctx.stroke();
+                }
+
+                // Horizontal grid lines (constant r)
+                for (let r = minR; r <= maxR; r++) {
+                    const y = latticeTransform.toScreenY(r);
+                    ctx.beginPath();
+                    ctx.moveTo(latticeTransform.toScreenX(minO), y);
+                    ctx.lineTo(latticeTransform.toScreenX(maxO), y);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // Axes layer - O and R coordinate axes
+        class AxesLayer extends Layer {
+            constructor(enabled = true) {
+                super('Axes', enabled);
+            }
+
+            render(ctx, sequences, latticeTransform) {
+                if (sequences.length === 0) return;
+
+                // Calculate bounds
+                let minO = Infinity, maxO = -Infinity;
+                let minR = Infinity, maxR = -Infinity;
+
+                for (const seq of sequences) {
+                    const visibleSteps = latticeTransform.getVisibleSteps(seq);
+                    for (const step of visibleSteps) {
+                        minO = Math.min(minO, step.o);
+                        maxO = Math.max(maxO, step.o);
+                        minR = Math.min(minR, step.r);
+                        maxR = Math.max(maxR, step.r);
+                    }
+                }
+
+                minO = Math.floor(minO) - 2;
+                maxO = Math.ceil(maxO) + 2;
+                minR = Math.floor(minR) - 2;
+                maxR = Math.ceil(maxR) + 2;
+
+                ctx.strokeStyle = CONFIG.colors.axes;
+                ctx.lineWidth = 2;
+
+                // O-axis (r = 0)
+                if (minR <= 0 && maxR >= 0) {
+                    const y = latticeTransform.toScreenY(0);
+                    ctx.beginPath();
+                    ctx.moveTo(latticeTransform.toScreenX(minO), y);
+                    ctx.lineTo(latticeTransform.toScreenX(maxO), y);
+                    ctx.stroke();
+                }
+
+                // R-axis (o = 0)
+                if (minO <= 0 && maxO >= 0) {
+                    const x = latticeTransform.toScreenX(0);
+                    ctx.beginPath();
+                    ctx.moveTo(x, latticeTransform.toScreenY(minR));
+                    ctx.lineTo(x, latticeTransform.toScreenY(maxR));
+                    ctx.stroke();
+                }
+
+                // Labels
+                ctx.fillStyle = CONFIG.colors.axes;
+                ctx.font = '14px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('o →', latticeTransform.toScreenX(maxO) - 20, latticeTransform.toScreenY(0) - 10);
+                ctx.save();
+                ctx.translate(latticeTransform.toScreenX(0) + 20, latticeTransform.toScreenY(maxR) + 20);
+                ctx.rotate(-Math.PI / 2);
+                ctx.fillText('r →', 0, 0);
+                ctx.restore();
+            }
+        }
+
+        // OE Blocks layer - ((OE)+E+) block visualization
+        class OEBlocksLayer extends Layer {
+            constructor(enabled = true) {
+                super('OE Blocks', enabled);
+            }
+
+            render(ctx, sequences, latticeTransform) {
+                for (const sequence of sequences) {
+                    const blocks = sequence.findOEBlocks();
+
+                    for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
+                        const block = blocks[blockIdx];
+                        const color = CONFIG.colors.blocks[blockIdx % CONFIG.colors.blocks.length];
+
+                        const startStepIdx = block.start;
+                        const endStepIdx = block.end + 1;
+                        const blockSteps = sequence.steps.slice(startStepIdx, endStepIdx + 1);
+
+                        if (blockSteps.length < 2) continue;
+
+                        // Find bounding box
+                        const oValues = blockSteps.map(s => s.o);
+                        const rValues = blockSteps.map(s => s.r);
+                        const minO = Math.min(...oValues);
+                        const maxO = Math.max(...oValues);
+                        const minR = Math.min(...rValues);
+                        const maxR = Math.max(...rValues);
+
+                        const padding = 10;
+                        const x1 = latticeTransform.toScreenX(minO) - padding;
+                        const y1 = latticeTransform.toScreenY(maxR) - padding;
+                        const width = latticeTransform.toScreenX(maxO) - latticeTransform.toScreenX(minO) + padding * 2;
+                        const height = latticeTransform.toScreenY(minR) - latticeTransform.toScreenY(maxR) + padding * 2;
+
+                        // Draw semi-transparent box
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = 3;
+                        ctx.setLineDash([5, 5]);
+                        ctx.strokeRect(x1, y1, width, height);
+                        ctx.setLineDash([]);
+
+                        ctx.fillStyle = color + '20';
+                        ctx.fillRect(x1, y1, width, height);
+
+                        // Label
+                        ctx.fillStyle = color;
+                        ctx.font = 'bold 12px sans-serif';
+                        ctx.textAlign = 'left';
+                        ctx.fillText(block.pattern, x1 + 5, y1 + 15);
+                    }
+                }
+            }
+        }
+
+        // Path layer - sequence paths and points
+        class PathLayer extends Layer {
+            constructor(enabled = true) {
+                super('Path', enabled);
+            }
+
+            render(ctx, sequences, latticeTransform) {
+                for (const sequence of sequences) {
+                    // Get visible steps
+                    const filteredSteps = latticeTransform.getVisibleSteps(sequence);
+
+                    // Draw edges
+                    for (let i = 0; i < filteredSteps.length - 1; i++) {
+                        const curr = filteredSteps[i];
+                        const next = filteredSteps[i + 1];
+
+                        const x1 = latticeTransform.toScreenX(curr.o);
+                        const y1 = latticeTransform.toScreenY(curr.r);
+                        const x2 = latticeTransform.toScreenX(next.o);
+                        const y2 = latticeTransform.toScreenY(next.r);
+
+                        ctx.strokeStyle = next.type === 'O' ? CONFIG.colors.oddStep : CONFIG.colors.evenStep;
+                        ctx.lineWidth = CONFIG.lineWidth;
+
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+                    }
+
+                    // Draw points
+                    for (let i = 0; i < filteredSteps.length; i++) {
+                        const step = filteredSteps[i];
+                        const x = latticeTransform.toScreenX(step.o);
+                        const y = latticeTransform.toScreenY(step.r);
+
+                        ctx.fillStyle = CONFIG.colors.point;
+                        ctx.beginPath();
+                        ctx.arc(x, y, CONFIG.pointRadius, 0, 2 * Math.PI);
+                        ctx.fill();
+
+                        // Label start and end
+                        if (i === 0 || i === filteredSteps.length - 1) {
+                            ctx.fillStyle = '#fff';
+                            ctx.font = 'bold 12px sans-serif';
+                            ctx.textAlign = 'center';
+                            ctx.fillText(
+                                i === 0 ? `Start (${step.x})` : `End (${step.x})`,
+                                x,
+                                y - 15
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // M Value layer - λ_m vs o with γ as circle size (right-axis)
+        class MValueLayer extends Layer {
+            constructor(enabled = false) {
+                super('M Values', enabled);
+                this.usesRightAxis = true;
+                this.rightAxisLabel = 'λₘ = log₃(m)';
+            }
+
+            getRightAxisBounds(sequences) {
+                let minLambdaM = Infinity;
+                let maxLambdaM = -Infinity;
+                for (const seq of sequences) {
+                    for (const step of seq.steps) {
+                        if (step.x % 2 === 1) {
+                            minLambdaM = Math.min(minLambdaM, step.lambda_m);
+                            maxLambdaM = Math.max(maxLambdaM, step.lambda_m);
+                        }
+                    }
+                }
+                return { min: minLambdaM, max: maxLambdaM };
+            }
+
+            render(ctx, sequences, latticeTransform, rightAxisTransform) {
+                if (!rightAxisTransform) return;
+
+                ctx.fillStyle = '#ff4444';  // Red color
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1;
+
+                for (const seq of sequences) {
+                    for (const step of seq.steps) {
+                        if (step.x % 2 === 1) {
+                            const x = latticeTransform.toScreenX(step.o);
+                            const y = rightAxisTransform.toScreenY(step.lambda_m);
+                            const radius = step.gamma + 3;
+
+                            ctx.beginPath();
+                            ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                            ctx.fill();
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+        }
+
         // Canvas renderer for the O-R lattice
         class LatticeRenderer {
             constructor(canvasId) {
@@ -524,7 +814,42 @@
                 };
                 this.hoveredPoint = null;
                 this.showEvenTerms = false; // Default to false - only show odd terms
+
+                // Layer management
+                this.layers = [];
+                this.rightAxisLayers = [];
+                this.rightAxisScale = null;
+
+                this.initializeLayers();
                 this.setupEventListeners();
+            }
+
+            initializeLayers() {
+                // Add layers in rendering order
+                this.addLayer(new GridLayer());
+                this.addLayer(new AxesLayer());
+                this.addLayer(new OEBlocksLayer());
+                this.addLayer(new PathLayer());
+
+                // Right-axis layers
+                this.addRightAxisLayer(new MValueLayer());
+            }
+
+            addLayer(layer) {
+                this.layers.push(layer);
+            }
+
+            addRightAxisLayer(layer) {
+                this.rightAxisLayers.push(layer);
+            }
+
+            findLayer(name) {
+                // Search in both arrays
+                let layer = this.layers.find(l => l.name === name);
+                if (!layer) {
+                    layer = this.rightAxisLayers.find(l => l.name === name);
+                }
+                return layer;
             }
 
             setupEventListeners() {
@@ -634,227 +959,156 @@
                 return this.transform.offsetY - r * this.transform.scale;
             }
 
-            render() {
-                // Clear canvas but not sequences
-                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-                this.drawGrid();
-                this.drawAxes();
+            calculateRightAxisScale() {
+                // Calculate bounds for all enabled right-axis layers
+                let minValue = Infinity;
+                let maxValue = -Infinity;
+                let hasEnabledLayers = false;
 
-                // Draw OE blocks first (as background)
-                for (const seq of this.sequences) {
-                    this.drawOEBlocks(seq);
+                for (const layer of this.rightAxisLayers) {
+                    if (layer.enabled) {
+                        const bounds = layer.getRightAxisBounds(this.sequences);
+                        if (bounds) {
+                            minValue = Math.min(minValue, bounds.min);
+                            maxValue = Math.max(maxValue, bounds.max);
+                            hasEnabledLayers = true;
+                        }
+                    }
                 }
 
-                // Then draw sequences on top
-                for (const seq of this.sequences) {
-                    this.drawSequence(seq);
+                if (!hasEnabledLayers) {
+                    this.rightAxisScale = null;
+                    return;
+                }
+
+                // Add some padding
+                const range = maxValue - minValue;
+                const padding = range * 0.1;
+                minValue -= padding;
+                maxValue += padding;
+
+                this.rightAxisScale = {
+                    min: minValue,
+                    max: maxValue,
+                    range: maxValue - minValue
+                };
+            }
+
+            drawRightAxis() {
+                if (!this.rightAxisScale) return;
+
+                // Calculate right axis position (right edge of canvas with margin)
+                const margin = 80;
+                const axisX = this.canvas.width - margin;
+
+                // Get canvas bounds in screen coordinates
+                const topY = 50;
+                const bottomY = this.canvas.height - 50;
+
+                // Helper to convert value to screen Y
+                const valueToScreenY = (value) => {
+                    const normalized = (value - this.rightAxisScale.min) / this.rightAxisScale.range;
+                    return bottomY - normalized * (bottomY - topY);
+                };
+
+                // Draw axis line
+                this.ctx.strokeStyle = CONFIG.colors.axes;
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.moveTo(axisX, topY);
+                this.ctx.lineTo(axisX, bottomY);
+                this.ctx.stroke();
+
+                // Draw tick marks and labels
+                this.ctx.fillStyle = CONFIG.colors.axes;
+                this.ctx.font = '12px sans-serif';
+                this.ctx.textAlign = 'left';
+                this.ctx.textBaseline = 'middle';
+
+                // Calculate nice tick intervals
+                const numTicks = 5;
+                const tickStep = this.rightAxisScale.range / numTicks;
+
+                for (let i = 0; i <= numTicks; i++) {
+                    const value = this.rightAxisScale.min + i * tickStep;
+                    const y = valueToScreenY(value);
+
+                    // Tick mark
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(axisX - 5, y);
+                    this.ctx.lineTo(axisX + 5, y);
+                    this.ctx.stroke();
+
+                    // Label
+                    this.ctx.fillText(value.toFixed(1), axisX + 10, y);
+                }
+
+                // Draw axis labels for enabled layers
+                const enabledLabels = this.rightAxisLayers
+                    .filter(l => l.enabled && l.rightAxisLabel)
+                    .map(l => l.rightAxisLabel);
+
+                if (enabledLabels.length > 0) {
+                    this.ctx.save();
+                    this.ctx.translate(this.canvas.width - 20, (topY + bottomY) / 2);
+                    this.ctx.rotate(-Math.PI / 2);
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText(enabledLabels.join(', '), 0, 0);
+                    this.ctx.restore();
+                }
+            }
+
+            render() {
+                // Clear canvas
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // Calculate right axis bounds from enabled layers
+                this.calculateRightAxisScale();
+
+                // Create lattice transform object for layers
+                const latticeTransform = {
+                    toScreenX: this.toScreenX.bind(this),
+                    toScreenY: this.toScreenY.bind(this),
+                    getVisibleSteps: this.getVisibleSteps.bind(this)
+                };
+
+                // Create right axis transform if needed
+                let rightAxisTransform = null;
+                if (this.rightAxisScale) {
+                    const margin = 80;
+                    const axisX = this.canvas.width - margin;
+                    const topY = 50;
+                    const bottomY = this.canvas.height - 50;
+
+                    rightAxisTransform = {
+                        toScreenX: this.toScreenX.bind(this),
+                        toScreenY: (value) => {
+                            const normalized = (value - this.rightAxisScale.min) / this.rightAxisScale.range;
+                            return bottomY - normalized * (bottomY - topY);
+                        }
+                    };
+                }
+
+                // Render regular layers
+                for (const layer of this.layers) {
+                    if (layer.enabled) {
+                        layer.render(this.ctx, this.sequences, latticeTransform);
+                    }
+                }
+
+                // Draw right axis
+                this.drawRightAxis();
+
+                // Render right-axis layers
+                for (const layer of this.rightAxisLayers) {
+                    if (layer.enabled) {
+                        layer.render(this.ctx, this.sequences, latticeTransform, rightAxisTransform);
+                    }
                 }
 
                 // Draw tooltip last (on top)
                 if (this.hoveredPoint) {
                     this.drawTooltip(this.hoveredPoint);
-                }
-            }
-
-            drawGrid() {
-                if (this.sequences.length === 0) return;
-
-                // Calculate bounds from visible steps
-                let minO = Infinity, maxO = -Infinity;
-                let minR = Infinity, maxR = -Infinity;
-
-                for (const seq of this.sequences) {
-                    const visibleSteps = this.getVisibleSteps(seq);
-
-                    for (const step of visibleSteps) {
-                        minO = Math.min(minO, step.o);
-                        maxO = Math.max(maxO, step.o);
-                        minR = Math.min(minR, step.r);
-                        maxR = Math.max(maxR, step.r);
-                    }
-                }
-
-                minO = Math.floor(minO) - 2;
-                maxO = Math.ceil(maxO) + 2;
-                minR = Math.floor(minR) - 2;
-                maxR = Math.ceil(maxR) + 2;
-
-                this.ctx.strokeStyle = CONFIG.colors.grid;
-                this.ctx.lineWidth = 0.5;
-
-                // Vertical grid lines (constant o)
-                for (let o = minO; o <= maxO; o++) {
-                    const x = this.toScreenX(o);
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(x, this.toScreenY(minR));
-                    this.ctx.lineTo(x, this.toScreenY(maxR));
-                    this.ctx.stroke();
-                }
-
-                // Horizontal grid lines (constant r)
-                for (let r = minR; r <= maxR; r++) {
-                    const y = this.toScreenY(r);
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(this.toScreenX(minO), y);
-                    this.ctx.lineTo(this.toScreenX(maxO), y);
-                    this.ctx.stroke();
-                }
-            }
-
-            drawAxes() {
-                if (this.sequences.length === 0) return;
-
-                // Calculate bounds from visible steps
-                let minO = Infinity, maxO = -Infinity;
-                let minR = Infinity, maxR = -Infinity;
-
-                for (const seq of this.sequences) {
-                    const visibleSteps = this.getVisibleSteps(seq);
-
-                    for (const step of visibleSteps) {
-                        minO = Math.min(minO, step.o);
-                        maxO = Math.max(maxO, step.o);
-                        minR = Math.min(minR, step.r);
-                        maxR = Math.max(maxR, step.r);
-                    }
-                }
-
-                minO = Math.floor(minO) - 2;
-                maxO = Math.ceil(maxO) + 2;
-                minR = Math.floor(minR) - 2;
-                maxR = Math.ceil(maxR) + 2;
-
-                this.ctx.strokeStyle = CONFIG.colors.axes;
-                this.ctx.lineWidth = 2;
-
-                // O-axis (r = 0)
-                if (minR <= 0 && maxR >= 0) {
-                    const y = this.toScreenY(0);
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(this.toScreenX(minO), y);
-                    this.ctx.lineTo(this.toScreenX(maxO), y);
-                    this.ctx.stroke();
-                }
-
-                // R-axis (o = 0)
-                if (minO <= 0 && maxO >= 0) {
-                    const x = this.toScreenX(0);
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(x, this.toScreenY(minR));
-                    this.ctx.lineTo(x, this.toScreenY(maxR));
-                    this.ctx.stroke();
-                }
-
-                // Labels
-                this.ctx.fillStyle = CONFIG.colors.axes;
-                this.ctx.font = '14px sans-serif';
-                this.ctx.textAlign = 'center';
-                this.ctx.fillText('o →', this.toScreenX(maxO) - 20, this.toScreenY(0) - 10);
-                this.ctx.save();
-                this.ctx.translate(this.toScreenX(0) + 20, this.toScreenY(maxR) + 20);
-                this.ctx.rotate(-Math.PI / 2);
-                this.ctx.fillText('← r', 0, 0);
-                this.ctx.restore();
-            }
-
-            drawSequence(sequence) {
-                // Get visible steps
-                const filteredSteps = this.getVisibleSteps(sequence);
-
-                // Draw edges between filtered steps
-                for (let i = 0; i < filteredSteps.length - 1; i++) {
-                    const curr = filteredSteps[i];
-                    const next = filteredSteps[i + 1];
-
-                    const x1 = this.toScreenX(curr.o);
-                    const y1 = this.toScreenY(curr.r);
-                    const x2 = this.toScreenX(next.o);
-                    const y2 = this.toScreenY(next.r);
-
-                    // Color based on step type (red for odd, blue for even)
-                    this.ctx.strokeStyle = next.type === 'O' ? CONFIG.colors.oddStep : CONFIG.colors.evenStep;
-                    this.ctx.lineWidth = CONFIG.lineWidth;
-
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(x1, y1);
-                    this.ctx.lineTo(x2, y2);
-                    this.ctx.stroke();
-                }
-
-                // Draw points
-                for (let i = 0; i < filteredSteps.length; i++) {
-                    const step = filteredSteps[i];
-                    const x = this.toScreenX(step.o);
-                    const y = this.toScreenY(step.r);
-
-                    this.ctx.fillStyle = CONFIG.colors.point;
-                    this.ctx.beginPath();
-                    this.ctx.arc(x, y, CONFIG.pointRadius, 0, 2 * Math.PI);
-                    this.ctx.fill();
-
-                    // Label start and end
-                    if (i === 0 || i === filteredSteps.length - 1) {
-                        this.ctx.fillStyle = '#fff';
-                        this.ctx.font = 'bold 12px sans-serif';
-                        this.ctx.textAlign = 'center';
-                        this.ctx.fillText(
-                            i === 0 ? `Start (${step.x})` : `End (${step.x})`,
-                            x,
-                            y - 15
-                        );
-                    }
-                }
-            }
-
-            drawOEBlocks(sequence) {
-                const blocks = sequence.findOEBlocks();
-
-                for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
-                    const block = blocks[blockIdx];
-                    const color = CONFIG.colors.blocks[blockIdx % CONFIG.colors.blocks.length];
-
-                    // Block starts at the ODD TERM before the first transition
-                    // Block ends at the ODD TERM after the last E+ step
-                    // blocks overlap by one point: the ending odd term of block N is the starting odd term of block N+1
-                    const startStepIdx = block.start; // Starting odd term
-                    const endStepIdx = block.end + 1; // Ending odd term (last OE index + 1)
-
-                    // Get all points in this block (from starting odd term through ending odd term)
-                    const blockSteps = sequence.steps.slice(startStepIdx, endStepIdx + 1); // +1 because slice end is exclusive
-
-                    if (blockSteps.length < 2) continue;
-
-                    // Find bounding box for this block
-                    const oValues = blockSteps.map(s => s.o);
-                    const rValues = blockSteps.map(s => s.r);
-                    const minO = Math.min(...oValues);
-                    const maxO = Math.max(...oValues);
-                    const minR = Math.min(...rValues);
-                    const maxR = Math.max(...rValues);
-
-                    // Add padding
-                    const padding = 10;
-                    const x1 = this.toScreenX(minO) - padding;
-                    const y1 = this.toScreenY(maxR) - padding;
-                    const width = this.toScreenX(maxO) - this.toScreenX(minO) + padding * 2;
-                    const height = this.toScreenY(minR) - this.toScreenY(maxR) + padding * 2;
-
-                    // Draw semi-transparent box
-                    this.ctx.strokeStyle = color;
-                    this.ctx.lineWidth = 3;
-                    this.ctx.setLineDash([5, 5]);
-                    this.ctx.strokeRect(x1, y1, width, height);
-                    this.ctx.setLineDash([]);
-
-                    // Fill with very transparent color
-                    this.ctx.fillStyle = color + '20'; // Add alpha
-                    this.ctx.fillRect(x1, y1, width, height);
-
-                    // Label the block
-                    this.ctx.fillStyle = color;
-                    this.ctx.font = 'bold 12px sans-serif';
-                    this.ctx.textAlign = 'left';
-                    this.ctx.fillText(block.pattern, x1 + 5, y1 + 15);
                 }
             }
 
@@ -1127,138 +1381,11 @@
             }
         }
 
-        // M vs O plot renderer
-        class MPlotRenderer {
-            constructor(canvasId) {
-                this.canvas = document.getElementById(canvasId);
-                this.ctx = this.canvas.getContext('2d');
-                this.data = null;
-            }
-
-            clear() {
-                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-                this.data = null;
-            }
-
-            render(sequence) {
-                // Extract (o, m, γ) tuples for odd x values only
-                this.data = [];
-                for (const step of sequence.steps) {
-                    if (step.x % 2 === 1) {
-                        this.data.push({ o: step.o, m: step.m, gamma: step.gamma });
-                    }
-                }
-
-                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-                if (this.data.length === 0) return;
-
-                // Find bounds
-                const oValues = this.data.map(d => d.o);
-                const mValues = this.data.map(d => d.m);
-                const minO = Math.min(...oValues);
-                const maxO = Math.max(...oValues);
-                const maxM = Math.max(...mValues);
-                const minM = 0;  // Scale m-axis from 0 to maxM
-
-                // Add padding
-                const padding = 60;
-                const plotWidth = this.canvas.width - padding * 2;
-                const plotHeight = this.canvas.height - padding * 2;
-
-                // Calculate scale - m-axis from 0 to maxM
-                const oRange = maxO - minO || 1;
-                const mRange = maxM || 1;  // Range from 0 to maxM
-                const scaleX = plotWidth / oRange;
-                const scaleY = plotHeight / mRange;
-
-                // Helper function to convert o,m to screen coordinates
-                const toScreenX = (o) => padding + (o - minO) * scaleX;
-                const toScreenY = (m) => this.canvas.height - padding - m * scaleY;
-
-                // Draw axes
-                this.ctx.strokeStyle = '#666';
-                this.ctx.lineWidth = 2;
-                this.ctx.beginPath();
-                this.ctx.moveTo(padding, this.canvas.height - padding);
-                this.ctx.lineTo(this.canvas.width - padding, this.canvas.height - padding);
-                this.ctx.moveTo(padding, this.canvas.height - padding);
-                this.ctx.lineTo(padding, padding);
-                this.ctx.stroke();
-
-                // Draw axis labels
-                this.ctx.fillStyle = '#e0e0e0';
-                this.ctx.font = '16px sans-serif';
-                this.ctx.textAlign = 'center';
-                this.ctx.fillText('o (remaining odd steps)', this.canvas.width / 2, this.canvas.height - 10);
-                this.ctx.save();
-                this.ctx.translate(15, this.canvas.height / 2);
-                this.ctx.rotate(-Math.PI / 2);
-                this.ctx.fillText('m = (x+1)/(2^α · 3^γ)', 0, 0);
-                this.ctx.restore();
-
-                // Draw grid lines
-                this.ctx.strokeStyle = '#333';
-                this.ctx.lineWidth = 0.5;
-                this.ctx.font = '12px sans-serif';
-                this.ctx.fillStyle = '#999';
-
-                // O axis ticks (show every integer or intelligently space them)
-                const oTickStep = Math.max(1, Math.ceil(oRange / 10));
-                this.ctx.textAlign = 'center';
-                for (let o = Math.ceil(minO); o <= maxO; o += oTickStep) {
-                    const x = toScreenX(o);
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(x, padding);
-                    this.ctx.lineTo(x, this.canvas.height - padding);
-                    this.ctx.stroke();
-                    this.ctx.fillText(o.toString(), x, this.canvas.height - padding + 20);
-                }
-
-                // M axis ticks
-                const mTickStep = Math.max(1, Math.ceil(mRange / 10));
-                this.ctx.textAlign = 'right';
-                for (let m = Math.ceil(minM); m <= maxM; m += mTickStep) {
-                    const y = toScreenY(m);
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(padding, y);
-                    this.ctx.lineTo(this.canvas.width - padding, y);
-                    this.ctx.stroke();
-                    this.ctx.fillText(m.toString(), padding - 10, y + 4);
-                }
-
-                // Draw points
-                this.ctx.fillStyle = '#4a9eff';
-                this.ctx.strokeStyle = '#000';
-                this.ctx.lineWidth = 1;
-
-                for (const point of this.data) {
-                    const x = toScreenX(point.o);
-                    const y = toScreenY(point.m);
-
-                    // γ=0 → 3 pixels, γ=1 → 4 pixels, γ=2 → 5 pixels, etc.
-                    const radius = point.gamma + 3;
-
-                    this.ctx.beginPath();
-                    this.ctx.arc(x, y, radius, 0, 2 * Math.PI);
-                    this.ctx.fill();
-                    this.ctx.stroke();
-                }
-
-                // Draw title
-                this.ctx.fillStyle = '#e0e0e0';
-                this.ctx.font = 'bold 16px sans-serif';
-                this.ctx.textAlign = 'center';
-                this.ctx.fillText('m vs o for odd x', this.canvas.width / 2, 25);
-            }
-        }
-
         // Main application
         class Application {
             constructor() {
                 this.renderer = new LatticeRenderer('latticeCanvas');
                 this.heatmapRenderer = new HeatmapRenderer('heatmapCanvas');
-                this.mPlotRenderer = new MPlotRenderer('mPlotCanvas');
                 this.currentSequence = null;
                 this.loadFromURL();
             }
@@ -1352,7 +1479,6 @@
                     this.renderer.clear();
                     this.renderer.addSequence(sequence);
                     this.heatmapRenderer.render(sequence);
-                    this.mPlotRenderer.render(sequence);
                     this.updateInfo(sequence);
 
                     // Update URL to reflect current x value
@@ -1367,7 +1493,6 @@
             clearCanvas() {
                 this.renderer.clear();
                 this.heatmapRenderer.clear();
-                this.mPlotRenderer.clear();
                 this.currentSequence = null;
                 document.getElementById('oeSequence').textContent = '-';
                 document.getElementById('seqLength').textContent = '-';
@@ -1384,6 +1509,14 @@
                 this.renderer.showEvenTerms = showEven;
                 this.renderer.fitToView();
                 this.renderer.render();
+            }
+
+            toggleLayer(layerName) {
+                const layer = this.renderer.findLayer(layerName);
+                if (layer) {
+                    layer.enabled = !layer.enabled;
+                    this.renderer.render();
+                }
             }
         }
 

@@ -360,6 +360,12 @@
 
                     // Compute d = 2^(2o-r) - 3^o (after o and r are set)
                     tempSteps[i].d = Math.pow(2, 2 * tempSteps[i].o - tempSteps[i].r) - Math.pow(3, tempSteps[i].o);
+
+                    // Compute k = 2^e - 3^o * x (after o and e are set)
+                    tempSteps[i].k = Math.pow(2, tempSteps[i].e) - Math.pow(3, tempSteps[i].o) * currentX;
+
+                    // Compute lambda_k = log_2(k)
+                    tempSteps[i].lambda_k = Math.log2(Math.abs(tempSteps[i].k));
                 }
 
                 this.steps = tempSteps;
@@ -894,6 +900,8 @@
                 lines.push(`λₘ = log₃(m) = ${step.lambda_m.toFixed(3)}`);
                 lines.push(`β = v₂(${step.x % 2 === 0 ? 'x' : '3x+1'}) = ${step.beta}`);
                 lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
+                lines.push(`k = 2^e - 3^o·x = ${step.k}`);
+                lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(3)}`);
 
                 this.ctx.font = '14px monospace';
                 const padding = 10;

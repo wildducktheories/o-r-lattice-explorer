@@ -111,6 +111,36 @@ The lines θ·o - r = c provide:
 
 Since k = 2^e - 3^o·x is non-zero (except at convergence), there's always an error term causing the actual trajectory to deviate from the ideal θ-slope estimation.
 
+### Pythagorean Identity for ε
+
+The λₓ layer visualizes a right triangle with vertices:
+- **(0, -log₂(x))**: Where (o,r)-estimator crosses the r-axis
+- **(o, -log₂(x))**: Right angle vertex (green circle location)
+- **(o, r)**: Actual lattice point
+
+The triangle has legs:
+- **Horizontal**: h = o
+- **Vertical**: v = r + log₂(x)
+
+This triangle satisfies a Pythagorean-like identity relating the error term ε:
+
+```
+(o + θ·v)² + (cₒ,ᵣ - cₓ)² = (1 + θ²)(o² + v²)
+```
+
+Equivalently, in normalized form:
+
+```
+o² + v² = [parallel projection]² + ε²
+```
+
+where:
+- **Parallel projection** = (o + θ·v)/√(1+θ²) along the θ-slope direction
+- **ε** = (cₒ,ᵣ - cₓ)/√(1+θ²) perpendicular to the θ-slope
+- **cₒ,ᵣ - cₓ** = θ·o - (r + log₂(x)) = unnormalized perpendicular distance
+
+**Geometric interpretation**: The hypotenuse from the (o,r)-estimator intercept to the actual lattice point can be decomposed into a component parallel to the θ-slope and a perpendicular error component ε. When ε = 0, the hypotenuse lies exactly along the θ-slope, meaning perfect alignment between estimators.
+
 ## Usage
 
 1. **Load a sequence**: Enter a starting value x₀ and click "Plot Sequence"

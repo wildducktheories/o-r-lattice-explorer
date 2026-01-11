@@ -862,23 +862,40 @@
                 const stepIndex = step.n;
                 const blockPattern = sequence.getBlockForStep(stepIndex);
 
-                // Build tooltip text lines
-                const coordsText = `x=${step.x}, o=${step.o}, r=${step.r}, k=${step.k}, j=${step.j}, i=${step.i}, m=${step.m}`;
+                // Build tooltip text lines in order: o, r, e, x, j, i, m, k
+                const lines = [];
 
-                this.ctx.font = '14px sans-serif';
-                const coordsMetrics = this.ctx.measureText(coordsText);
-                const padding = 8;
+                // Optional block pattern at top
+                if (blockPattern) {
+                    lines.push(blockPattern);
+                }
+
+                // Lattice position
+                lines.push(`o = ${step.o}`);
+                lines.push(`r = ${step.r}`);
+                lines.push(`e = ${step.e}`);
+
+                // Element
+                lines.push(`x = ${step.x}`);
+
+                // Derived parameters (in derivation order)
+                lines.push(`j = v₂(x+1) = ${step.j}`);
+                lines.push(`i = v₃(x+1) = ${step.i}`);
+                lines.push(`m = (x+1)/(2^j·3^i) = ${step.m}`);
+                lines.push(`k = v₂(${step.x % 2 === 0 ? 'x' : '3x+1'}) = ${step.k}`);
+
+                this.ctx.font = '14px monospace';
+                const padding = 10;
                 const lineHeight = 18;
 
-                let boxWidth = coordsMetrics.width + padding * 2;
-                let boxHeight = lineHeight + padding * 2;
-
-                // If there's a block pattern, add a line for it
-                if (blockPattern) {
-                    const blockMetrics = this.ctx.measureText(blockPattern);
-                    boxWidth = Math.max(boxWidth, blockMetrics.width + padding * 2);
-                    boxHeight += lineHeight;
+                // Calculate box dimensions
+                let boxWidth = 0;
+                for (const line of lines) {
+                    const metrics = this.ctx.measureText(line);
+                    boxWidth = Math.max(boxWidth, metrics.width);
                 }
+                boxWidth += padding * 2;
+                const boxHeight = lines.length * lineHeight + padding * 2;
 
                 // Position tooltip above the point, but keep it on screen
                 let tooltipX = x - boxWidth / 2;
@@ -902,23 +919,27 @@
                 this.ctx.lineWidth = 1;
                 this.ctx.strokeRect(tooltipX, tooltipY, boxWidth, boxHeight);
 
-                // Draw text
+                // Draw text lines
                 this.ctx.fillStyle = '#ffffff';
-                this.ctx.font = '14px sans-serif';
-                let currentY = tooltipY + padding + lineHeight / 2;
+                this.ctx.font = '14px monospace';
+                this.ctx.textAlign = 'left';
+                this.ctx.textBaseline = 'top';
 
-                // Draw block pattern centered at top (if exists)
-                if (blockPattern) {
-                    this.ctx.textAlign = 'center';
-                    this.ctx.textBaseline = 'middle';
-                    this.ctx.fillText(blockPattern, tooltipX + boxWidth / 2, currentY);
+                let currentY = tooltipY + padding;
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+
+                    // Center the block pattern if it exists (first line)
+                    if (i === 0 && blockPattern) {
+                        this.ctx.textAlign = 'center';
+                        this.ctx.fillText(line, tooltipX + boxWidth / 2, currentY);
+                        this.ctx.textAlign = 'left';
+                    } else {
+                        this.ctx.fillText(line, tooltipX + padding, currentY);
+                    }
+
                     currentY += lineHeight;
                 }
-
-                // Draw coordinates
-                this.ctx.textAlign = 'left';
-                this.ctx.textBaseline = 'middle';
-                this.ctx.fillText(coordsText, tooltipX + padding, currentY);
             }
         }
 

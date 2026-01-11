@@ -961,6 +961,17 @@
                     this.hoveredPoint = null;
                     this.render();
                 });
+
+                this.canvas.addEventListener('dblclick', (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const mouseX = e.clientX - rect.left;
+                    const mouseY = e.clientY - rect.top;
+
+                    const point = this.findPointAtPosition(mouseX, mouseY);
+                    if (point && this.onPointDoubleClick) {
+                        this.onPointDoubleClick(point.step.x);
+                    }
+                });
             }
 
             findPointAtPosition(mouseX, mouseY) {
@@ -1614,6 +1625,22 @@
                 this.renderer = new LatticeRenderer('latticeCanvas');
                 this.heatmapRenderer = new HeatmapRenderer('heatmapCanvas');
                 this.currentSequence = null;
+
+                // Set up double-click handler
+                this.renderer.onPointDoubleClick = (x) => {
+                    this.loadSequenceForX(x);
+                };
+
+                // Handle browser back/forward buttons
+                window.addEventListener('popstate', (e) => {
+                    if (e.state && e.state.x) {
+                        document.getElementById('x0Input').value = e.state.x;
+                        this.plotSequence();
+                    } else {
+                        this.loadFromURL();
+                    }
+                });
+
                 this.loadFromURL();
             }
 
@@ -1630,10 +1657,10 @@
             }
 
             updateURL(x) {
-                // Update URL without reloading the page
+                // Update URL without reloading the page, storing state for back button
                 const url = new URL(window.location);
                 url.searchParams.set('x', x);
-                window.history.pushState({}, '', url);
+                window.history.pushState({ x: x }, '', url);
             }
 
             showError(message) {
@@ -1747,6 +1774,12 @@
                     this.showError(error.message);
                     console.error(error);
                 }
+            }
+
+            loadSequenceForX(x) {
+                // Called when double-clicking a lattice point
+                document.getElementById('x0Input').value = x;
+                this.plotSequence();
             }
 
             clearCanvas() {

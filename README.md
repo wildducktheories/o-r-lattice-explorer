@@ -146,7 +146,9 @@ where:
 1. **Load a sequence**: Enter a starting value x₀ and click "Plot Sequence"
 2. **Toggle layers**: Use checkboxes to show/hide different visualizations
 3. **Explore points**: Hover over lattice points to see detailed analysis
-4. **View examples**: Click example buttons to load interesting sequences (27, 31, 63, 127, 70055, 77031)
+4. **Navigate sequences**: Double-click any lattice point to load its sequence
+   - Browser history is updated, allowing back/forward navigation between sequences
+5. **View examples**: Click example buttons to load interesting sequences (27, 31, 63, 127, 70055, 77031)
 
 ### Keyboard Controls
 

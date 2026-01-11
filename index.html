@@ -209,6 +209,7 @@
                 <label><input type="checkbox" id="layerBlocks" onchange="app.toggleLayer('OE Blocks')"> OE Blocks</label>
                 <label><input type="checkbox" id="layerMValue" onchange="app.toggleLayer('M Values')"> λₘ-layer</label>
                 <label><input type="checkbox" id="layerXValue" checked onchange="app.toggleLayer('X Values')"> λₓ-layer</label>
+                <label><input type="checkbox" id="layerEpsilon" onchange="app.toggleLayer('Epsilon')"> ε-layer</label>
                 <button id="animateButton" onclick="app.toggleAnimation()" style="margin-left: 20px;">Animate to λₓ</button>
             </div>
         </div>
@@ -939,6 +940,68 @@
             }
         }
 
+        // Epsilon layer - plots ε = (cₒ,ᵣ - cₓ)/√(1+θ²) on right axis
+        class EpsilonLayer extends Layer {
+            constructor(enabled = false) {
+                super('Epsilon', enabled);
+                this.usesRightAxis = true;
+                this.rightAxisLabel = 'ε = (cₒ,ᵣ - cₓ)/√(1+θ²)';
+            }
+
+            getRightAxisBounds(sequences) {
+                const theta = 2 - Math.log2(3);
+                const normFactor = Math.sqrt(1 + theta * theta);
+
+                let minEpsilon = Infinity;
+                let maxEpsilon = -Infinity;
+
+                for (const seq of sequences) {
+                    for (const step of seq.steps) {
+                        if (step.x % 2 === 1) {
+                            const c_or = theta * step.o - step.r;
+                            const c_x = Math.log2(step.x);
+                            const epsilon = (c_or - c_x) / normFactor;
+
+                            minEpsilon = Math.min(minEpsilon, epsilon);
+                            maxEpsilon = Math.max(maxEpsilon, epsilon);
+                        }
+                    }
+                }
+
+                return { min: minEpsilon, max: maxEpsilon };
+            }
+
+            render(ctx, sequences, latticeTransform, rightAxisTransform) {
+                if (!rightAxisTransform) return;
+
+                const theta = 2 - Math.log2(3);
+                const normFactor = Math.sqrt(1 + theta * theta);
+
+                ctx.fillStyle = 'rgba(255, 0, 255, 0.5)';  // Semi-transparent magenta
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.lineWidth = 1;
+
+                for (const seq of sequences) {
+                    for (const step of seq.steps) {
+                        if (step.x % 2 === 1) {
+                            const c_or = theta * step.o - step.r;
+                            const c_x = Math.log2(step.x);
+                            const epsilon = (c_or - c_x) / normFactor;
+
+                            const x = latticeTransform.toScreenX(step.o);
+                            const y = rightAxisTransform.toScreenY(epsilon);
+                            const radius = 4; // Fixed size for epsilon points
+
+                            ctx.beginPath();
+                            ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                            ctx.fill();
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+        }
+
         // Canvas renderer for the O-R lattice
         class LatticeRenderer {
             constructor(canvasId) {
@@ -977,6 +1040,7 @@
 
                 // Right-axis layers
                 this.addRightAxisLayer(new MValueLayer());
+                this.addRightAxisLayer(new EpsilonLayer());
             }
 
             addLayer(layer) {

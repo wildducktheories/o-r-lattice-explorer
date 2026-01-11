@@ -29,6 +29,9 @@ The visualizer uses a flexible layer-based architecture where each layer can be 
   - Shows vertical line from lattice point (o,r) to (o, -log₂(x))
   - Shows horizontal line from theta slope intersection to x point
   - Works for both odd and even x when hovering
+- **ε Layer**: Plots error term ε = (cₒ,ᵣ - cₓ)/√(1+θ²) on right y-axis (magenta circles at (o, ε), radius = 4)
+  - Visualizes the perpendicular distance from the (o,r)-estimator to the actual lattice point
+  - Only displays for odd x values
 
 ### Theta-Line Reference System
 

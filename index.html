@@ -208,7 +208,7 @@
                 <label><input type="checkbox" id="layerPath" checked onchange="app.toggleLayer('Path')"> Path</label>
                 <label><input type="checkbox" id="layerBlocks" onchange="app.toggleLayer('OE Blocks')"> OE Blocks</label>
                 <label><input type="checkbox" id="layerMValue" onchange="app.toggleLayer('M Values')"> λₘ-layer</label>
-                <label><input type="checkbox" id="layerXValue" onchange="app.toggleLayer('X Values')"> λₓ-layer</label>
+                <label><input type="checkbox" id="layerXValue" checked onchange="app.toggleLayer('X Values')"> λₓ-layer</label>
             </div>
         </div>
 
@@ -229,6 +229,13 @@
                     <div class="legend-color" style="background: linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #00ff00); border: 2px dashed #fff;"></div>
                     <span>Colored boxes: ((OE)+E+) blocks accelerate multiple O steps</span>
                 </div>
+            </div>
+        </div>
+
+        <div id="infoPanel" class="info-panel" style="display: none;">
+            <div class="info-section">
+                <div class="info-label">Starting Value (x₀)</div>
+                <div class="info-value" id="infoContent"></div>
             </div>
         </div>
 
@@ -802,44 +809,81 @@
             }
         }
 
-        // X Value layer - λ_x vs o with β as circle size (right-axis)
+        // X Value layer - plots at (o, -log₂(x)) on left axis with β as circle size
+        // and draws horizontal line to theta slope intersection
         class XValueLayer extends Layer {
-            constructor(enabled = false) {
+            constructor(enabled = true) {
                 super('X Values', enabled);
-                this.usesRightAxis = true;
-                this.flipOrientation = false;  // Set to true to plot -λₓ instead of λₓ
-                this.rightAxisLabel = this.flipOrientation ? '-λₓ = -log₂(x)' : 'λₓ = log₂(x)';
-            }
-
-            getRightAxisBounds(sequences) {
-                let minValue = Infinity;
-                let maxValue = -Infinity;
-                for (const seq of sequences) {
-                    for (const step of seq.steps) {
-                        if (step.x % 2 === 1) {
-                            const value = this.flipOrientation ? -step.lambda_x : step.lambda_x;
-                            minValue = Math.min(minValue, value);
-                            maxValue = Math.max(maxValue, value);
-                        }
-                    }
-                }
-                return { min: minValue, max: maxValue };
+                this.usesRightAxis = false;
             }
 
             render(ctx, sequences, latticeTransform, rightAxisTransform) {
-                if (!rightAxisTransform) return;
+                const theta = 2 - Math.log2(3);
 
-                ctx.fillStyle = 'rgba(68, 200, 255, 0.5)';  // Semi-transparent cyan
-                ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';  // Semi-transparent black stroke
-                ctx.lineWidth = 1;
+                // Determine which step should have the horizontal line
+                const highlightStep = latticeTransform.hoveredPoint
+                    ? latticeTransform.hoveredPoint.step
+                    : latticeTransform.defaultStep;
 
+                // Draw horizontal line for highlighted step (works for both odd and even x)
+                if (highlightStep) {
+                    const o = highlightStep.o;
+                    const r = highlightStep.r;
+                    const negLogX = -highlightStep.lambda_x;
+
+                    // Find intersection of horizontal line at r = -log₂(x)
+                    // with theta slope line through (o, r)
+                    // Theta line: r_line = θ·(o_point - o) + r
+                    // Horizontal: r_line = -log₂(x)
+                    // Intersection: o_int = o + (-log₂(x) - r)/θ
+                    const o_int = o + (negLogX - r) / theta;
+
+                    // Draw vertical line from lattice point (o,r) to (o, -log₂(x))
+                    ctx.strokeStyle = 'rgba(50, 205, 50, 0.6)';  // Semi-transparent green (lime green)
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([4, 2]);
+                    ctx.beginPath();
+                    ctx.moveTo(latticeTransform.toScreenX(o), latticeTransform.toScreenY(r));
+                    ctx.lineTo(latticeTransform.toScreenX(o), latticeTransform.toScreenY(negLogX));
+                    ctx.stroke();
+
+                    // Draw horizontal line from intersection to x point
+                    ctx.beginPath();
+                    ctx.moveTo(latticeTransform.toScreenX(o_int), latticeTransform.toScreenY(negLogX));
+                    ctx.lineTo(latticeTransform.toScreenX(o), latticeTransform.toScreenY(negLogX));
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    // Draw circle at highlighted point's lambda_x position
+                    const x = latticeTransform.toScreenX(o);
+                    const y = latticeTransform.toScreenY(negLogX);
+                    const radius = highlightStep.beta + 3;
+
+                    ctx.fillStyle = 'rgba(50, 205, 50, 0.5)';  // Semi-transparent green (lime green)
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';  // Semi-transparent black stroke
+                    ctx.lineWidth = 1;
+
+                    ctx.beginPath();
+                    ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.stroke();
+                }
+
+                // Draw circles only for odd x values
                 for (const seq of sequences) {
                     for (const step of seq.steps) {
                         if (step.x % 2 === 1) {
-                            const x = latticeTransform.toScreenX(step.o);
-                            const value = this.flipOrientation ? -step.lambda_x : step.lambda_x;
-                            const y = rightAxisTransform.toScreenY(value);
+                            const o = step.o;
+                            const negLogX = -step.lambda_x;
+
+                            // Draw circle at x point
+                            const x = latticeTransform.toScreenX(o);
+                            const y = latticeTransform.toScreenY(negLogX);
                             const radius = step.beta + 3;
+
+                            ctx.fillStyle = 'rgba(50, 205, 50, 0.5)';  // Semi-transparent green (lime green)
+                            ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';  // Semi-transparent black stroke
+                            ctx.lineWidth = 1;
 
                             ctx.beginPath();
                             ctx.arc(x, y, radius, 0, 2 * Math.PI);
@@ -880,10 +924,10 @@
                 this.addLayer(new AxesLayer());
                 this.addLayer(new OEBlocksLayer());
                 this.addLayer(new PathLayer());
+                this.addLayer(new XValueLayer());
 
                 // Right-axis layers
                 this.addRightAxisLayer(new MValueLayer());
-                this.addRightAxisLayer(new XValueLayer());
             }
 
             addLayer(layer) {
@@ -1135,7 +1179,9 @@
                 const latticeTransform = {
                     toScreenX: this.toScreenX.bind(this),
                     toScreenY: this.toScreenY.bind(this),
-                    getVisibleSteps: this.getVisibleSteps.bind(this)
+                    getVisibleSteps: this.getVisibleSteps.bind(this),
+                    hoveredPoint: this.hoveredPoint,
+                    defaultStep: this.sequences.length > 0 ? this.sequences[0].steps[0] : null
                 };
 
                 // Create right axis transform if needed
@@ -1341,10 +1387,10 @@
                 const epsilon = (c_or - c_x) / normFactor;
 
                 lines.push(`θ = 2 - log₂(3) = ${theta.toFixed(4)}`);
-                lines.push(`c_{o,r} = θ·o - r = ${c_or.toFixed(3)}`);
-                lines.push(`c_x = log₂(x) = ${c_x.toFixed(3)}`);
-                lines.push(`L = c_{o,r}/√(1+θ²) = ${L.toFixed(3)}`);
-                lines.push(`ε = (c_{o,r}-c_x)/√(1+θ²) = ${epsilon.toFixed(3)}`);
+                lines.push(`cₒ,ᵣ = θ·o - r = ${c_or.toFixed(3)}`);
+                lines.push(`cₓ = log₂(x) = ${c_x.toFixed(3)}`);
+                lines.push(`L = cₒ,ᵣ/√(1+θ²) = ${L.toFixed(3)}`);
+                lines.push(`ε = (cₒ,ᵣ-cₓ)/√(1+θ²) = ${epsilon.toFixed(3)}`);
 
                 this.ctx.font = '14px monospace';
                 const padding = 10;
@@ -1615,8 +1661,40 @@
                     document.getElementById('oeBlocks').textContent = 'None found';
                 }
 
+                // Update x₀ info panel
+                this.updateX0Info(sequence);
+
                 // Verify invariants
                 this.verifyInvariants(sequence);
+            }
+
+            updateX0Info(sequence) {
+                const step = sequence.steps[0]; // x₀
+                const theta = 2 - Math.log2(3);
+                const c_or = theta * step.o - step.r;
+                const c_x = Math.log2(step.x);
+                const normFactor = Math.sqrt(1 + theta * theta);
+                const L = c_or / normFactor;
+                const epsilon = (c_or - c_x) / normFactor;
+
+                const lines = [];
+                lines.push(`x = ${step.x}`);
+                lines.push(`o = ${step.o}, r = ${step.r}, e = ${step.e}`);
+                lines.push(`α = ${step.alpha}, γ = ${step.gamma}, β = ${step.beta}`);
+                lines.push(`m = ${step.m.toFixed(4)}`);
+                lines.push(`λₓ = log₂(x) = ${step.lambda_x.toFixed(4)}`);
+                lines.push(`λₘ = log₃(m) = ${step.lambda_m.toFixed(4)}`);
+                lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
+                lines.push(`k = 2^e - 3^o·x = ${step.k}`);
+                lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(4)}`);
+                lines.push(`θ = 2 - log₂(3) = ${theta.toFixed(4)}`);
+                lines.push(`cₒ,ᵣ = θ·o - r = ${c_or.toFixed(3)}`);
+                lines.push(`cₓ = log₂(x) = ${c_x.toFixed(3)}`);
+                lines.push(`L = cₒ,ᵣ/√(1+θ²) = ${L.toFixed(3)}`);
+                lines.push(`ε = (cₒ,ᵣ-cₓ)/√(1+θ²) = ${epsilon.toFixed(3)}`);
+
+                document.getElementById('infoContent').textContent = lines.join('\n');
+                document.getElementById('infoPanel').style.display = 'block';
             }
 
             verifyInvariants(sequence) {
@@ -1678,6 +1756,7 @@
                 document.getElementById('oeSequence').textContent = '-';
                 document.getElementById('seqLength').textContent = '-';
                 document.getElementById('oeBlocks').textContent = '-';
+                document.getElementById('infoPanel').style.display = 'none';
             }
 
             loadExample(x0) {

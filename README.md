@@ -25,7 +25,10 @@ The visualizer uses a flexible layer-based architecture where each layer can be 
 - **Path Layer**: Sequence trajectory with semi-transparent gold points
 - **OE Blocks Layer**: Highlights ((OE)+E+) block structures
 - **λₘ Layer**: Plots log₃(m) on right y-axis (red circles, size = γ + 3)
-- **λₓ Layer**: Plots log₂(x) on right y-axis (cyan circles, size = β + 3)
+- **λₓ Layer** (enabled by default): Plots -log₂(x) on left axis (green circles at (o, -log₂(x)), size = β + 3)
+  - Shows vertical line from lattice point (o,r) to (o, -log₂(x))
+  - Shows horizontal line from theta slope intersection to x point
+  - Works for both odd and even x when hovering
 
 ### Theta-Line Reference System
 
@@ -63,10 +66,18 @@ Hover over any lattice point to see detailed information:
 
 **Theta-Line Analysis:**
 - θ = 2 - log₂(3)
-- c_{o,r} = θ·o - r: intercept through lattice point
-- c_x = log₂(x): intercept through x-predictor
-- L = c_{o,r}/√(1+θ²): normal distance from origin line
-- ε = (c_{o,r} - c_x)/√(1+θ²): error between predictions
+- cₒ,ᵣ = θ·o - r: intercept through lattice point
+- cₓ = log₂(x): intercept through x-predictor
+- L = cₒ,ᵣ/√(1+θ²): normal distance from origin line
+- ε = (cₒ,ᵣ - cₓ)/√(1+θ²): error between predictions
+
+### Starting Value Info Panel
+
+Displays comprehensive properties for the sequence's starting value x₀:
+- All lattice coordinates, valuations, and derived parameters
+- Lambda values (λₓ, λₘ, λₖ)
+- Complete theta-line analysis (θ, cₒ,ᵣ, cₓ, L, ε)
+- Appears immediately below the O-R lattice plot
 
 ## Mathematical Background
 
@@ -93,8 +104,8 @@ The slope θ = 2 - log₂(3) ≈ 0.4150 emerges from the fundamental Collatz ope
 - Even steps: x → x/2^β (divide by power of 2)
 
 The lines θ·o - r = c provide:
-- **c_{o,r}**: Where the actual point lies
-- **c_x**: Where x predicts the point should lie
+- **cₒ,ᵣ**: Where the actual point lies
+- **cₓ**: Where x predicts the point should lie
 - **L**: Signed distance from origin
 - **ε**: Error due to k ≠ 0
 

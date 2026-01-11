@@ -206,8 +206,9 @@
                 <label><input type="checkbox" id="layerGrid" checked onchange="app.toggleLayer('Grid')"> Grid</label>
                 <label><input type="checkbox" id="layerAxes" checked onchange="app.toggleLayer('Axes')"> Axes</label>
                 <label><input type="checkbox" id="layerPath" checked onchange="app.toggleLayer('Path')"> Path</label>
-                <label><input type="checkbox" id="layerBlocks" checked onchange="app.toggleLayer('OE Blocks')"> OE Blocks</label>
-                <label><input type="checkbox" id="layerMValue" onchange="app.toggleLayer('M Values')"> m-layer</label>
+                <label><input type="checkbox" id="layerBlocks" onchange="app.toggleLayer('OE Blocks')"> OE Blocks</label>
+                <label><input type="checkbox" id="layerMValue" onchange="app.toggleLayer('M Values')"> λₘ-layer</label>
+                <label><input type="checkbox" id="layerXValue" onchange="app.toggleLayer('X Values')"> λₓ-layer</label>
             </div>
         </div>
 
@@ -646,7 +647,7 @@
 
         // OE Blocks layer - ((OE)+E+) block visualization
         class OEBlocksLayer extends Layer {
-            constructor(enabled = true) {
+            constructor(enabled = false) {
                 super('OE Blocks', enabled);
             }
 
@@ -734,7 +735,7 @@
                         const x = latticeTransform.toScreenX(step.o);
                         const y = latticeTransform.toScreenY(step.r);
 
-                        ctx.fillStyle = CONFIG.colors.point;
+                        ctx.fillStyle = 'rgba(255, 215, 0, 0.6)';  // Semi-transparent gold
                         ctx.beginPath();
                         ctx.arc(x, y, CONFIG.pointRadius, 0, 2 * Math.PI);
                         ctx.fill();
@@ -780,8 +781,8 @@
             render(ctx, sequences, latticeTransform, rightAxisTransform) {
                 if (!rightAxisTransform) return;
 
-                ctx.fillStyle = '#ff4444';  // Red color
-                ctx.strokeStyle = '#000';
+                ctx.fillStyle = 'rgba(255, 68, 68, 0.5)';  // Semi-transparent red
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';  // Semi-transparent black stroke
                 ctx.lineWidth = 1;
 
                 for (const seq of sequences) {
@@ -790,6 +791,55 @@
                             const x = latticeTransform.toScreenX(step.o);
                             const y = rightAxisTransform.toScreenY(step.lambda_m);
                             const radius = step.gamma + 3;
+
+                            ctx.beginPath();
+                            ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                            ctx.fill();
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+        }
+
+        // X Value layer - λ_x vs o with β as circle size (right-axis)
+        class XValueLayer extends Layer {
+            constructor(enabled = false) {
+                super('X Values', enabled);
+                this.usesRightAxis = true;
+                this.flipOrientation = false;  // Set to true to plot -λₓ instead of λₓ
+                this.rightAxisLabel = this.flipOrientation ? '-λₓ = -log₂(x)' : 'λₓ = log₂(x)';
+            }
+
+            getRightAxisBounds(sequences) {
+                let minValue = Infinity;
+                let maxValue = -Infinity;
+                for (const seq of sequences) {
+                    for (const step of seq.steps) {
+                        if (step.x % 2 === 1) {
+                            const value = this.flipOrientation ? -step.lambda_x : step.lambda_x;
+                            minValue = Math.min(minValue, value);
+                            maxValue = Math.max(maxValue, value);
+                        }
+                    }
+                }
+                return { min: minValue, max: maxValue };
+            }
+
+            render(ctx, sequences, latticeTransform, rightAxisTransform) {
+                if (!rightAxisTransform) return;
+
+                ctx.fillStyle = 'rgba(68, 200, 255, 0.5)';  // Semi-transparent cyan
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';  // Semi-transparent black stroke
+                ctx.lineWidth = 1;
+
+                for (const seq of sequences) {
+                    for (const step of seq.steps) {
+                        if (step.x % 2 === 1) {
+                            const x = latticeTransform.toScreenX(step.o);
+                            const value = this.flipOrientation ? -step.lambda_x : step.lambda_x;
+                            const y = rightAxisTransform.toScreenY(value);
+                            const radius = step.beta + 3;
 
                             ctx.beginPath();
                             ctx.arc(x, y, radius, 0, 2 * Math.PI);
@@ -833,6 +883,7 @@
 
                 // Right-axis layers
                 this.addRightAxisLayer(new MValueLayer());
+                this.addRightAxisLayer(new XValueLayer());
             }
 
             addLayer(layer) {
@@ -1020,7 +1071,7 @@
                 this.ctx.stroke();
 
                 // Draw tick marks and labels
-                this.ctx.fillStyle = CONFIG.colors.axes;
+                this.ctx.fillStyle = '#e0e0e0';  // Brighter tick text
                 this.ctx.font = '12px sans-serif';
                 this.ctx.textAlign = 'left';
                 this.ctx.textBaseline = 'middle';
@@ -1034,6 +1085,7 @@
                     const y = valueToScreenY(value);
 
                     // Tick mark
+                    this.ctx.strokeStyle = CONFIG.colors.axes;
                     this.ctx.beginPath();
                     this.ctx.moveTo(axisX - 5, y);
                     this.ctx.lineTo(axisX + 5, y);
@@ -1041,6 +1093,19 @@
 
                     // Label
                     this.ctx.fillText(value.toFixed(1), axisX + 10, y);
+                }
+
+                // Draw λₘ = 0 line if 0 is within range
+                if (this.rightAxisScale.min <= 0 && this.rightAxisScale.max >= 0) {
+                    const zeroY = valueToScreenY(0);
+                    this.ctx.strokeStyle = '#888';
+                    this.ctx.lineWidth = 1;
+                    this.ctx.setLineDash([5, 3]);
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(50, zeroY);
+                    this.ctx.lineTo(this.canvas.width - margin, zeroY);
+                    this.ctx.stroke();
+                    this.ctx.setLineDash([]);
                 }
 
                 // Draw axis labels for enabled layers
@@ -1053,6 +1118,7 @@
                     this.ctx.translate(this.canvas.width - 20, (topY + bottomY) / 2);
                     this.ctx.rotate(-Math.PI / 2);
                     this.ctx.textAlign = 'center';
+                    this.ctx.fillStyle = '#e0e0e0';  // Brighter axis label
                     this.ctx.fillText(enabledLabels.join(', '), 0, 0);
                     this.ctx.restore();
                 }
@@ -1106,10 +1172,120 @@
                     }
                 }
 
+                // Draw theta reference lines
+                this.drawThetaLines();
+
+                // Draw lambda_x reference line
+                this.drawLambdaXLine(rightAxisTransform);
+
                 // Draw tooltip last (on top)
                 if (this.hoveredPoint) {
                     this.drawTooltip(this.hoveredPoint);
                 }
+            }
+
+            drawThetaLines() {
+                if (this.sequences.length === 0) return;
+
+                // Calculate theta = 2 - log_2(3)
+                const theta = 2 - Math.log2(3);
+
+                // Determine which point to use for reference
+                let refStep;
+                if (this.hoveredPoint) {
+                    refStep = this.hoveredPoint.step;
+                } else {
+                    // Use the first step (x0) of the first sequence
+                    refStep = this.sequences[0].steps[0];
+                }
+
+                // Get bounds for drawing lines across the canvas
+                let minO = Infinity, maxO = -Infinity;
+                for (const seq of this.sequences) {
+                    const visibleSteps = this.getVisibleSteps(seq);
+                    for (const step of visibleSteps) {
+                        minO = Math.min(minO, step.o);
+                        maxO = Math.max(maxO, step.o);
+                    }
+                }
+                minO = Math.floor(minO) - 2;
+                maxO = Math.ceil(maxO) + 2;
+
+                // Line 1: Passes through (o_ref, r_ref)
+                // r = theta * o + (r_ref - theta * o_ref)
+                const c1 = refStep.r - theta * refStep.o;
+                const r1_start = theta * minO + c1;
+                const r1_end = theta * maxO + c1;
+
+                this.ctx.strokeStyle = 'rgba(255, 140, 0, 0.6)';  // Semi-transparent orange
+                this.ctx.lineWidth = 1.5;
+                this.ctx.setLineDash([6, 3]);
+                this.ctx.beginPath();
+                this.ctx.moveTo(this.toScreenX(minO), this.toScreenY(r1_start));
+                this.ctx.lineTo(this.toScreenX(maxO), this.toScreenY(r1_end));
+                this.ctx.stroke();
+
+                // Line 2: Passes through (0, -log_2(x_ref))
+                // r = theta * o - log_2(x)
+                const c2 = -Math.log2(refStep.x);
+                const r2_start = theta * minO + c2;
+                const r2_end = theta * maxO + c2;
+
+                this.ctx.strokeStyle = 'rgba(255, 69, 0, 0.6)';  // Semi-transparent red-orange
+                this.ctx.lineWidth = 1.5;
+                this.ctx.setLineDash([3, 3]);
+                this.ctx.beginPath();
+                this.ctx.moveTo(this.toScreenX(minO), this.toScreenY(r2_start));
+                this.ctx.lineTo(this.toScreenX(maxO), this.toScreenY(r2_end));
+                this.ctx.stroke();
+
+                // Line 3: Passes through origin (0, 0)
+                // r = theta * o (intercept = 0)
+                const r3_start = theta * minO;
+                const r3_end = theta * maxO;
+
+                this.ctx.strokeStyle = 'rgba(128, 128, 128, 0.5)';  // Semi-transparent gray
+                this.ctx.lineWidth = 1;
+                this.ctx.setLineDash([2, 2]);
+                this.ctx.beginPath();
+                this.ctx.moveTo(this.toScreenX(minO), this.toScreenY(r3_start));
+                this.ctx.lineTo(this.toScreenX(maxO), this.toScreenY(r3_end));
+                this.ctx.stroke();
+
+                // Reset line dash
+                this.ctx.setLineDash([]);
+            }
+
+            drawLambdaXLine(rightAxisTransform) {
+                if (!rightAxisTransform || this.sequences.length === 0) return;
+
+                // Find the XValueLayer to check orientation setting
+                const xValueLayer = this.rightAxisLayers.find(l => l instanceof XValueLayer);
+                if (!xValueLayer) return;
+
+                const flipOrientation = xValueLayer.flipOrientation;
+                let value;
+
+                // Use hovered point if available, otherwise use initial x0
+                if (this.hoveredPoint) {
+                    value = flipOrientation ? -this.hoveredPoint.step.lambda_x : this.hoveredPoint.step.lambda_x;
+                } else {
+                    // Use the first step (x0) of the first sequence
+                    value = flipOrientation ? -this.sequences[0].steps[0].lambda_x : this.sequences[0].steps[0].lambda_x;
+                }
+
+                const y = rightAxisTransform.toScreenY(value);
+                const margin = 80;
+
+                // Draw horizontal line across canvas at lambda_x (or -lambda_x)
+                this.ctx.strokeStyle = 'rgba(68, 200, 255, 0.7)';  // Cyan to match X layer
+                this.ctx.lineWidth = 2;
+                this.ctx.setLineDash([8, 4]);
+                this.ctx.beginPath();
+                this.ctx.moveTo(50, y);
+                this.ctx.lineTo(this.canvas.width - margin, y);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
             }
 
             drawTooltip(hoveredPoint) {
@@ -1156,6 +1332,20 @@
                 lines.push(`k = 2^e - 3^o·x = ${step.k}`);
                 lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(3)}`);
 
+                // Theta-line intercepts and distances
+                const theta = 2 - Math.log2(3);
+                const c_or = theta * step.o - step.r;
+                const c_x = Math.log2(step.x);
+                const normFactor = Math.sqrt(1 + theta * theta);
+                const L = c_or / normFactor;
+                const epsilon = (c_or - c_x) / normFactor;
+
+                lines.push(`θ = 2 - log₂(3) = ${theta.toFixed(4)}`);
+                lines.push(`c_{o,r} = θ·o - r = ${c_or.toFixed(3)}`);
+                lines.push(`c_x = log₂(x) = ${c_x.toFixed(3)}`);
+                lines.push(`L = c_{o,r}/√(1+θ²) = ${L.toFixed(3)}`);
+                lines.push(`ε = (c_{o,r}-c_x)/√(1+θ²) = ${epsilon.toFixed(3)}`);
+
                 this.ctx.font = '14px monospace';
                 const padding = 10;
                 const lineHeight = 18;
@@ -1169,18 +1359,9 @@
                 boxWidth += padding * 2;
                 const boxHeight = lines.length * lineHeight + padding * 2;
 
-                // Position tooltip above the point, but keep it on screen
-                let tooltipX = x - boxWidth / 2;
-                let tooltipY = y - boxHeight - 15;
-
-                // Keep tooltip within canvas bounds
-                if (tooltipX < 5) tooltipX = 5;
-                if (tooltipX + boxWidth > this.canvas.width - 5) {
-                    tooltipX = this.canvas.width - boxWidth - 5;
-                }
-                if (tooltipY < 5) {
-                    tooltipY = y + 20; // Show below if not enough space above
-                }
+                // Position tooltip in top-left corner
+                const tooltipX = 10;
+                const tooltipY = 10;
 
                 // Draw box background
                 this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';

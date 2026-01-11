@@ -1625,6 +1625,7 @@
                 this.renderer = new LatticeRenderer('latticeCanvas');
                 this.heatmapRenderer = new HeatmapRenderer('heatmapCanvas');
                 this.currentSequence = null;
+                this.isInitialLoad = true;
 
                 // Set up double-click handler
                 this.renderer.onPointDoubleClick = (x) => {
@@ -1633,12 +1634,20 @@
 
                 // Handle browser back/forward buttons
                 window.addEventListener('popstate', (e) => {
+                    // Get x value from state or URL
+                    let x;
                     if (e.state && e.state.x) {
-                        document.getElementById('x0Input').value = e.state.x;
-                        this.plotSequence();
+                        x = e.state.x;
                     } else {
-                        this.loadFromURL();
+                        const urlParams = new URLSearchParams(window.location.search);
+                        x = parseInt(urlParams.get('x')) || 27;
                     }
+
+                    document.getElementById('x0Input').value = x;
+                    // Don't update history when handling popstate
+                    this.isInitialLoad = true;
+                    this.plotSequence();
+                    this.isInitialLoad = false;
                 });
 
                 this.loadFromURL();
@@ -1660,7 +1669,14 @@
                 // Update URL without reloading the page, storing state for back button
                 const url = new URL(window.location);
                 url.searchParams.set('x', x);
-                window.history.pushState({ x: x }, '', url);
+
+                if (this.isInitialLoad) {
+                    // Replace state on initial load to avoid creating extra history entry
+                    window.history.replaceState({ x: x }, '', url);
+                } else {
+                    // Push new state for user-initiated changes
+                    window.history.pushState({ x: x }, '', url);
+                }
             }
 
             showError(message) {
@@ -1819,6 +1835,7 @@
         // Plot default example on load
         window.addEventListener('load', () => {
             app.plotSequence();
+            app.isInitialLoad = false;
         });
     </script>
 </body>

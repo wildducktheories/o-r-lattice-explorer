@@ -1202,6 +1202,11 @@
                         maxO = Math.max(maxO, step.o);
                         minR = Math.min(minR, step.r);
                         maxR = Math.max(maxR, step.r);
+
+                        // Also consider lambda_x values for viewport bounds
+                        const negLogX = -step.lambda_x;
+                        minR = Math.min(minR, negLogX);
+                        maxR = Math.max(maxR, negLogX);
                     }
                 }
 

@@ -854,8 +854,8 @@
             }
         }
 
-        // X Value layer - plots at (o, -log₂(x)) on left axis with β as circle size
-        // and draws L-shaped lines: vertical from (o,r) down, horizontal from (o,r)-estimator
+        // X Value layer - plots at (o, log₂(x)) on left axis with β as circle size
+        // Also draws mirrored plot at (o, -log₂(x)) with fixed size and lower intensity
         class XValueLayer extends Layer {
             constructor(enabled = true) {
                 super('X Values', enabled);
@@ -870,38 +870,48 @@
                     ? latticeTransform.hoveredPoint.step
                     : latticeTransform.defaultStep;
 
-                // Draw horizontal line for highlighted step (works for both odd and even x)
+                // Draw circle for highlighted step
                 if (highlightStep) {
                     const o = highlightStep.o;
                     const r = highlightStep.r;
+                    const logX = highlightStep.lambda_x;
                     const negLogX = -highlightStep.lambda_x;
 
-                    // Find intersection of horizontal line at r = -log₂(x)
-                    // with x-estimator (theta slope line through (o, r))
-                    // x-estimator: r_line = θ·(o_point - o) + r
-                    // Horizontal: r_line = -log₂(x)
-                    // Intersection: o_int = o + (-log₂(x) - r)/θ
-                    const o_int = o + (negLogX - r) / theta;
-
-                    // Draw vertical line from lattice point (o,r) to (o, -log₂(x))
-                    ctx.strokeStyle = 'rgba(50, 205, 50, 0.6)';  // Semi-transparent green (lime green)
+                    // Draw connector lines: (0,-log₂(x)) → (o,-log₂(x)) → (o,r)
+                    ctx.strokeStyle = 'rgba(50, 205, 50, 0.4)';  // Lower intensity green for mirror lines
                     ctx.lineWidth = 1.5;
                     ctx.setLineDash([4, 2]);
+
+                    // Draw horizontal line from (0,-log₂(x)) to (o,-log₂(x))
                     ctx.beginPath();
-                    ctx.moveTo(latticeTransform.toScreenX(o), latticeTransform.toScreenY(r));
+                    ctx.moveTo(latticeTransform.toScreenX(0), latticeTransform.toScreenY(negLogX));
                     ctx.lineTo(latticeTransform.toScreenX(o), latticeTransform.toScreenY(negLogX));
                     ctx.stroke();
 
-                    // Draw horizontal line from intersection to x point
+                    // Draw vertical line from (o,-log₂(x)) to (o,r)
                     ctx.beginPath();
-                    ctx.moveTo(latticeTransform.toScreenX(o_int), latticeTransform.toScreenY(negLogX));
-                    ctx.lineTo(latticeTransform.toScreenX(o), latticeTransform.toScreenY(negLogX));
+                    ctx.moveTo(latticeTransform.toScreenX(o), latticeTransform.toScreenY(negLogX));
+                    ctx.lineTo(latticeTransform.toScreenX(o), latticeTransform.toScreenY(r));
                     ctx.stroke();
                     ctx.setLineDash([]);
 
+                    // Draw circle at highlighted point's mirrored lambda_x position (-log₂(x))
+                    const xMirror = latticeTransform.toScreenX(o);
+                    const yMirror = latticeTransform.toScreenY(negLogX);
+                    const radiusMirror = 4;  // Fixed size for mirror
+
+                    ctx.fillStyle = 'rgba(50, 205, 50, 0.3)';  // Lower intensity for mirror
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';  // Lower intensity stroke
+                    ctx.lineWidth = 1;
+
+                    ctx.beginPath();
+                    ctx.arc(xMirror, yMirror, radiusMirror, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.stroke();
+
                     // Draw circle at highlighted point's lambda_x position
                     const x = latticeTransform.toScreenX(o);
-                    const y = latticeTransform.toScreenY(negLogX);
+                    const y = latticeTransform.toScreenY(logX);
                     const radius = highlightStep.beta + 3;
 
                     ctx.fillStyle = 'rgba(50, 205, 50, 0.5)';  // Semi-transparent green (lime green)
@@ -919,15 +929,39 @@
                     for (const step of seq.steps) {
                         if (step.x % 2 === 1) {
                             const o = step.o;
-                            const negLogX = -step.lambda_x;
+                            const logX = step.lambda_x;
 
                             // Draw circle at x point
                             const x = latticeTransform.toScreenX(o);
-                            const y = latticeTransform.toScreenY(negLogX);
+                            const y = latticeTransform.toScreenY(logX);
                             const radius = step.beta + 3;
 
                             ctx.fillStyle = 'rgba(50, 205, 50, 0.5)';  // Semi-transparent green (lime green)
                             ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';  // Semi-transparent black stroke
+                            ctx.lineWidth = 1;
+
+                            ctx.beginPath();
+                            ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                            ctx.fill();
+                            ctx.stroke();
+                        }
+                    }
+                }
+
+                // Draw mirrored circles at -log₂(x) with fixed size and lower intensity
+                for (const seq of sequences) {
+                    for (const step of seq.steps) {
+                        if (step.x % 2 === 1) {
+                            const o = step.o;
+                            const negLogX = -step.lambda_x;
+
+                            // Draw mirrored circle
+                            const x = latticeTransform.toScreenX(o);
+                            const y = latticeTransform.toScreenY(negLogX);
+                            const radius = 4;  // Fixed size
+
+                            ctx.fillStyle = 'rgba(50, 205, 50, 0.2)';  // Lower intensity green
+                            ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';  // Lower intensity stroke
                             ctx.lineWidth = 1;
 
                             ctx.beginPath();
@@ -1136,9 +1170,9 @@
             }
 
             getAnimatedY(step) {
-                // Interpolate between r and -log₂(x)
+                // Interpolate between r and log₂(x)
                 const t = this.currentEasedT || 0;
-                return (1 - t) * step.r + t * (-step.lambda_x);
+                return (1 - t) * step.r + t * step.lambda_x;
             }
 
             findPointAtPosition(mouseX, mouseY) {
@@ -1203,10 +1237,10 @@
                         minR = Math.min(minR, step.r);
                         maxR = Math.max(maxR, step.r);
 
-                        // Also consider lambda_x values for viewport bounds
-                        const negLogX = -step.lambda_x;
-                        minR = Math.min(minR, negLogX);
-                        maxR = Math.max(maxR, negLogX);
+                        // Also consider lambda_x values for viewport bounds (both positive and negative)
+                        const logX = step.lambda_x;
+                        minR = Math.min(minR, logX, -logX);
+                        maxR = Math.max(maxR, logX, -logX);
                     }
                 }
 

@@ -1624,9 +1624,18 @@
                 boxWidth += padding * 2;
                 const boxHeight = lines.length * lineHeight + padding * 2;
 
-                // Position tooltip in top-left corner
-                const tooltipX = 10;
+                // Position tooltip in top-right corner by default, but switch to top-left
+                // if the tooltip would overlay the hovered point
+                let tooltipX = this.canvas.width - boxWidth - 10;
                 const tooltipY = 10;
+
+                // Check if tooltip would overlap the hovered point (with margin)
+                const margin = 20; // Extra margin around the point
+                if (x >= tooltipX - margin && x <= this.canvas.width - 10 + margin &&
+                    y >= tooltipY - margin && y <= tooltipY + boxHeight + margin) {
+                    // Switch to top-left corner
+                    tooltipX = 10;
+                }
 
                 // Draw box background
                 this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';

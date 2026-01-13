@@ -144,6 +144,22 @@
             word-break: break-all;
         }
 
+        .congruence-link {
+            color: #4a9eff;
+            text-decoration: none;
+            cursor: pointer;
+            padding: 0 2px;
+        }
+
+        .congruence-link:hover {
+            color: #6bb3ff;
+            text-decoration: underline;
+        }
+
+        .congruence-link:active {
+            color: #88c5ff;
+        }
+
         .legend {
             display: flex;
             gap: 20px;
@@ -409,7 +425,7 @@
                 // 1. x < x_search
                 // 2. L < L_search
                 // 3. o < o_search
-                // Among all candidates, return the one with LARGEST L (closest to L_search from below)
+                // Among all candidates, return the one with LARGEST o (closest to o_search from below)
 
                 if (!this.sortedByL || this.sortedByL.length === 0) return null;
 
@@ -441,22 +457,18 @@
                 }
 
                 // Now search backward from candidateIdx to find the best match
-                // We want: L < searchL, o < searchO, x < searchX, and maximize L
+                // We want: L < searchL, o < searchO, x < searchX, and maximize o
                 let bestCandidate = null;
-                let bestL = -Infinity;
+                let bestO = -Infinity;
 
                 // Search from candidateIdx backward (decreasing L)
                 for (let i = candidateIdx; i >= 0; i--) {
                     const entry = this.sortedByL[i];
 
-                    // Since sortedByL is sorted by L ascending, once we've found a candidate,
-                    // any further entries will have smaller L, so we can stop
-                    if (bestCandidate && entry.L < bestL) break;
-
                     // Check all three conditions
                     if (entry.L < searchL && entry.o < searchO && entry.step.x < searchX) {
-                        if (entry.L > bestL) {
-                            bestL = entry.L;
+                        if (entry.o > bestO) {
+                            bestO = entry.o;
                             bestCandidate = entry.step;
                         }
                     }
@@ -596,6 +608,39 @@
                 return null;
             }
 
+            getOEBlockK(block) {
+                // Get k value for OE block congruence
+                // k = number of even terms in the block
+                let k = 0;
+                for (const char of block.pattern) {
+                    if (char === 'E') k++;
+                }
+                return k;
+            }
+
+            getFirstDescentK(step) {
+                // Get k value for first descent congruence
+                // k = 2(o_x - o_fd) - (r_x - r_fd)
+                const descentTerm = this.findFirstDescentTerm(step);
+                if (!descentTerm) return null;
+
+                const k = 2 * (step.o - descentTerm.o) - (step.r - descentTerm.r);
+                return k;
+            }
+
+            getCongruences(x, k) {
+                // Get congruence values x±2^k
+                const power = Math.pow(2, k);
+                const prev = x - power;
+                const next = x + power;
+                return {
+                    prev: prev > 0 ? prev : null,
+                    current: x,
+                    next: next,
+                    k: k
+                };
+            }
+
             getLastEvenInOEPlusIndices() {
                 // Returns step indices of the last even term in each (OE)+ sequence
                 // These should be shown even when "Show even terms" is unchecked
@@ -611,6 +656,42 @@
 
                 return indices;
             }
+        }
+
+        // Utility functions for congruence display
+
+        // Format congruence display as clickable HTML for info panels
+        function formatCongruenceHTML(congruences) {
+            const { prev, current, next, k } = congruences;
+            let parts = [`k=${k}:`];
+
+            if (prev) {
+                parts.push(`<a href="?x=${prev}" class="congruence-link">←</a>`);
+                parts.push(`<a href="?x=${prev}" class="congruence-link">${prev}</a>`);
+            }
+
+            parts.push('|');
+            parts.push(`<strong>${current}</strong>`);  // Current not linked
+            parts.push('|');
+
+            if (next) {
+                parts.push(`<a href="?x=${next}" class="congruence-link">${next}</a>`);
+                parts.push(`<a href="?x=${next}" class="congruence-link">→</a>`);
+            }
+
+            return parts.join(' ');
+        }
+
+        // Format congruence display as plain text for canvas tooltips
+        function formatCongruenceText(congruences) {
+            const { prev, current, next, k } = congruences;
+            let parts = [`k=${k}:`];
+
+            if (prev) parts.push(`← ${prev}`);
+            parts.push(`| ${current} |`);
+            if (next) parts.push(`${next} →`);
+
+            return parts.join(' ');
         }
 
         // Base Layer class for rendering system
@@ -2150,6 +2231,9 @@
                     this.isInitialLoad = false;
                 });
 
+                // Set up congruence link navigation
+                this.setupCongruenceNavigation();
+
                 this.loadFromURL();
             }
 
@@ -2163,6 +2247,21 @@
                         document.getElementById('x0Input').value = x;
                     }
                 }
+            }
+
+            setupCongruenceNavigation() {
+                // Delegate click handler for congruence links
+                document.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('congruence-link')) {
+                        e.preventDefault();
+                        const href = e.target.getAttribute('href');
+                        const match = href.match(/\?x=(\d+)/);
+                        if (match) {
+                            const x = parseInt(match[1]);
+                            this.loadSequenceForX(x);
+                        }
+                    }
+                });
             }
 
             updateURL(x) {
@@ -2192,14 +2291,23 @@
                 document.getElementById('oeSequence').textContent = sequence.getOEString();
                 document.getElementById('seqLength').textContent = sequence.steps.length - 1; // Exclude start
 
-                // Display OE blocks - each on its own line with initial x value
+                // Display OE blocks - each with congruence navigation
                 const blocks = sequence.findOEBlocks();
                 if (blocks.length > 0) {
                     const blockLines = blocks.map((b, i) => {
-                        const startX = sequence.steps[b.start].x;
-                        return `x=${startX}: ${b.pattern}`;
+                        const startStep = sequence.steps[b.start];
+                        const k = sequence.getOEBlockK(b);
+                        const congruences = sequence.getCongruences(startStep.x, k);
+
+                        // Block pattern line
+                        const patternLine = `x=${startStep.x}: ${b.pattern}`;
+
+                        // Congruence navigation line
+                        const congLine = formatCongruenceHTML(congruences);
+
+                        return `${patternLine}<br>&nbsp;&nbsp;${congLine}`;
                     });
-                    document.getElementById('oeBlocks').textContent = blockLines.join('\n');
+                    document.getElementById('oeBlocks').innerHTML = blockLines.join('<br><br>');
                 } else {
                     document.getElementById('oeBlocks').textContent = 'None found';
                 }
@@ -2234,6 +2342,14 @@
                 const descentTerm = sequence.findFirstDescentTerm(step);
                 if (descentTerm) {
                     lines.push(`x<sub>fd</sub> = ${descentTerm.x}`);
+
+                    // Add congruence navigation for x_fd
+                    const k = sequence.getFirstDescentK(step);
+                    if (k !== null) {
+                        const congruences = sequence.getCongruences(step.x, k);
+                        const congLine = formatCongruenceHTML(congruences);
+                        lines.push(`&nbsp;&nbsp;${congLine}`);
+                    }
                 } else {
                     lines.push(`x<sub>fd</sub> = none`);
                 }

@@ -870,6 +870,60 @@
                     ? latticeTransform.hoveredPoint.step
                     : latticeTransform.defaultStep;
 
+                // Draw horizontal reference lines on log₂(x) graph corresponding to theta-slope lines
+                // These lines correspond to the three theta-slope lines on the o-r lattice
+                if (highlightStep && sequences.length > 0) {
+                    // Get bounds for drawing lines across the canvas
+                    let minO = Infinity, maxO = -Infinity;
+                    for (const seq of sequences) {
+                        const visibleSteps = latticeTransform.getVisibleSteps(seq);
+                        for (const step of visibleSteps) {
+                            minO = Math.min(minO, step.o);
+                            maxO = Math.max(maxO, step.o);
+                        }
+                    }
+                    minO = Math.floor(minO) - 2;
+                    maxO = Math.ceil(maxO) + 2;
+
+                    // Line 1: Orange - corresponds to x-estimator on o-r lattice
+                    // O-R lattice: r = θ*o + c1, where c1 = r - θ*o
+                    // Log₂(x) graph: y = -c1 = θ*o - r = cₒ,ᵣ
+                    const c_or = theta * highlightStep.o - highlightStep.r;
+                    ctx.strokeStyle = 'rgba(255, 140, 0, 0.6)';  // Match orange theta line
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([6, 3]);
+                    ctx.beginPath();
+                    ctx.moveTo(latticeTransform.toScreenX(minO), latticeTransform.toScreenY(c_or));
+                    ctx.lineTo(latticeTransform.toScreenX(maxO), latticeTransform.toScreenY(c_or));
+                    ctx.stroke();
+
+                    // Line 2: Red-orange - corresponds to (o,r)-estimator on o-r lattice
+                    // O-R lattice: r = θ*o + c2, where c2 = -log₂(x)
+                    // Log₂(x) graph: y = -c2 = log₂(x) = cₓ
+                    const c_x = Math.log2(highlightStep.x);
+                    ctx.strokeStyle = 'rgba(255, 69, 0, 0.6)';  // Match red-orange theta line
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([3, 3]);
+                    ctx.beginPath();
+                    ctx.moveTo(latticeTransform.toScreenX(minO), latticeTransform.toScreenY(c_x));
+                    ctx.lineTo(latticeTransform.toScreenX(maxO), latticeTransform.toScreenY(c_x));
+                    ctx.stroke();
+
+                    // Line 3: Gray - corresponds to origin line on o-r lattice
+                    // O-R lattice: r = θ*o (c3 = 0)
+                    // Log₂(x) graph: y = 0
+                    ctx.strokeStyle = 'rgba(128, 128, 128, 0.5)';  // Match gray theta line
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([2, 2]);
+                    ctx.beginPath();
+                    ctx.moveTo(latticeTransform.toScreenX(minO), latticeTransform.toScreenY(0));
+                    ctx.lineTo(latticeTransform.toScreenX(maxO), latticeTransform.toScreenY(0));
+                    ctx.stroke();
+
+                    // Reset line dash
+                    ctx.setLineDash([]);
+                }
+
                 // Draw circle for highlighted step
                 if (highlightStep) {
                     const o = highlightStep.o;
@@ -1060,6 +1114,11 @@
                 this.isAnimating = false;
                 this.animationDirection = 1; // 1 = forward, -1 = backward
 
+                // Tooltip positioning
+                // null = auto (smart placement based on quadrant)
+                // or one of: 'top-left', 'top-right', 'bottom-left', 'bottom-right'
+                this.tooltipPosition = null;
+
                 this.initializeLayers();
                 this.setupEventListeners();
             }
@@ -1100,12 +1159,21 @@
                     const mouseX = e.clientX - rect.left;
                     const mouseY = e.clientY - rect.top;
 
-                    this.hoveredPoint = this.findPointAtPosition(mouseX, mouseY);
+                    const newHoveredPoint = this.findPointAtPosition(mouseX, mouseY);
+
+                    // Reset tooltip position if we moved to a different point
+                    if (!this.hoveredPoint || !newHoveredPoint ||
+                        this.hoveredPoint.step.n !== newHoveredPoint.step.n) {
+                        this.tooltipPosition = null;
+                    }
+
+                    this.hoveredPoint = newHoveredPoint;
                     this.render();
                 });
 
                 this.canvas.addEventListener('mouseleave', () => {
                     this.hoveredPoint = null;
+                    this.tooltipPosition = null;
                     this.render();
                 });
 
@@ -1119,6 +1187,57 @@
                         this.onPointDoubleClick(point.step.x);
                     }
                 });
+
+                // Keyboard controls for tooltip positioning
+                document.addEventListener('keydown', (e) => {
+                    if (!this.hoveredPoint) return;
+
+                    const key = e.key.toLowerCase();
+                    if (!['u', 'l', 'd', 'r'].includes(key)) return;
+
+                    e.preventDefault();
+
+                    // Get current position (or auto-calculated position)
+                    let currentPos = this.tooltipPosition || this.getAutoTooltipPosition(this.hoveredPoint);
+
+                    // Move tooltip based on key
+                    const [vertical, horizontal] = currentPos.split('-');
+                    let newVertical = vertical;
+                    let newHorizontal = horizontal;
+
+                    if (key === 'u' && vertical === 'bottom') newVertical = 'top';
+                    if (key === 'd' && vertical === 'top') newVertical = 'bottom';
+                    if (key === 'l' && horizontal === 'right') newHorizontal = 'left';
+                    if (key === 'r' && horizontal === 'left') newHorizontal = 'right';
+
+                    this.tooltipPosition = `${newVertical}-${newHorizontal}`;
+                    this.render();
+                });
+            }
+
+            getAutoTooltipPosition(hoveredPoint) {
+                // Determine tooltip position based on quadrant of hovered point
+                // Place tooltip on opposite side to avoid obscuring the point
+                const step = hoveredPoint.step;
+                const x = this.toScreenX(step.o);
+                const y = this.toScreenY(step.r);
+
+                const centerX = this.canvas.width / 2;
+                const centerY = this.canvas.height / 2;
+
+                // Determine quadrant and place tooltip on opposite side
+                const isLeft = x < centerX;
+                const isTop = y < centerY;
+
+                if (isTop && isLeft) {
+                    return 'bottom-right';
+                } else if (isTop && !isLeft) {
+                    return 'bottom-left';
+                } else if (!isTop && isLeft) {
+                    return 'top-right';
+                } else {
+                    return 'top-left';
+                }
             }
 
             startAnimation() {
@@ -1624,17 +1743,24 @@
                 boxWidth += padding * 2;
                 const boxHeight = lines.length * lineHeight + padding * 2;
 
-                // Position tooltip in top-right corner by default, but switch to top-left
-                // if the tooltip would overlay the hovered point
-                let tooltipX = this.canvas.width - boxWidth - 10;
-                const tooltipY = 10;
+                // Determine tooltip position: use manual override or auto-calculate based on quadrant
+                const position = this.tooltipPosition || this.getAutoTooltipPosition(hoveredPoint);
+                const [vertical, horizontal] = position.split('-');
 
-                // Check if tooltip would overlap the hovered point (with margin)
-                const margin = 20; // Extra margin around the point
-                if (x >= tooltipX - margin && x <= this.canvas.width - 10 + margin &&
-                    y >= tooltipY - margin && y <= tooltipY + boxHeight + margin) {
-                    // Switch to top-left corner
-                    tooltipX = 10;
+                const margin = 10;
+                let tooltipX, tooltipY;
+
+                // Position based on vertical/horizontal components
+                if (horizontal === 'left') {
+                    tooltipX = margin;
+                } else {
+                    tooltipX = this.canvas.width - boxWidth - margin;
+                }
+
+                if (vertical === 'top') {
+                    tooltipY = margin;
+                } else {
+                    tooltipY = this.canvas.height - boxHeight - margin;
                 }
 
                 // Draw box background

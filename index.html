@@ -978,51 +978,49 @@
                     ctx.stroke();
                 }
 
-                // Draw circles only for odd x values
+                // Draw circles only for visible steps (respects "show evens" toggle)
                 for (const seq of sequences) {
-                    for (const step of seq.steps) {
-                        if (step.x % 2 === 1) {
-                            const o = step.o;
-                            const logX = step.lambda_x;
+                    const visibleSteps = latticeTransform.getVisibleSteps(seq);
+                    for (const step of visibleSteps) {
+                        const o = step.o;
+                        const logX = step.lambda_x;
 
-                            // Draw circle at x point
-                            const x = latticeTransform.toScreenX(o);
-                            const y = latticeTransform.toScreenY(logX);
-                            const radius = step.beta + 3;
+                        // Draw circle at x point
+                        const x = latticeTransform.toScreenX(o);
+                        const y = latticeTransform.toScreenY(logX);
+                        const radius = step.beta + 3;
 
-                            ctx.fillStyle = 'rgba(50, 205, 50, 0.5)';  // Semi-transparent green (lime green)
-                            ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';  // Semi-transparent black stroke
-                            ctx.lineWidth = 1;
+                        ctx.fillStyle = 'rgba(50, 205, 50, 0.5)';  // Semi-transparent green (lime green)
+                        ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';  // Semi-transparent black stroke
+                        ctx.lineWidth = 1;
 
-                            ctx.beginPath();
-                            ctx.arc(x, y, radius, 0, 2 * Math.PI);
-                            ctx.fill();
-                            ctx.stroke();
-                        }
+                        ctx.beginPath();
+                        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                        ctx.fill();
+                        ctx.stroke();
                     }
                 }
 
                 // Draw mirrored circles at -log₂(x) with fixed size and lower intensity
                 for (const seq of sequences) {
-                    for (const step of seq.steps) {
-                        if (step.x % 2 === 1) {
-                            const o = step.o;
-                            const negLogX = -step.lambda_x;
+                    const visibleSteps = latticeTransform.getVisibleSteps(seq);
+                    for (const step of visibleSteps) {
+                        const o = step.o;
+                        const negLogX = -step.lambda_x;
 
-                            // Draw mirrored circle
-                            const x = latticeTransform.toScreenX(o);
-                            const y = latticeTransform.toScreenY(negLogX);
-                            const radius = 4;  // Fixed size
+                        // Draw mirrored circle
+                        const x = latticeTransform.toScreenX(o);
+                        const y = latticeTransform.toScreenY(negLogX);
+                        const radius = 4;  // Fixed size
 
-                            ctx.fillStyle = 'rgba(50, 205, 50, 0.2)';  // Lower intensity green
-                            ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';  // Lower intensity stroke
-                            ctx.lineWidth = 1;
+                        ctx.fillStyle = 'rgba(50, 205, 50, 0.2)';  // Lower intensity green
+                        ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';  // Lower intensity stroke
+                        ctx.lineWidth = 1;
 
-                            ctx.beginPath();
-                            ctx.arc(x, y, radius, 0, 2 * Math.PI);
-                            ctx.fill();
-                            ctx.stroke();
-                        }
+                        ctx.beginPath();
+                        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                        ctx.fill();
+                        ctx.stroke();
                     }
                 }
             }

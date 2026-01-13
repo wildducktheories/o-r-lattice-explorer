@@ -297,7 +297,9 @@
             constructor(x0) {
                 this.x0 = x0;
                 this.steps = [];
+                this.sortedByL = null;  // Sorted index for descent term search
                 this.compute();
+                this.buildLIndex();  // Build L-index after computing sequence
             }
 
             compute() {
@@ -380,6 +382,95 @@
                 }
 
                 this.steps = tempSteps;
+            }
+
+            buildLIndex() {
+                // Build sorted index for efficient descent term search
+                // Compute L for each step and create sorted array
+                const theta = 2 - Math.log2(3);
+                const normFactor = Math.sqrt(1 + theta * theta);
+
+                // Create array of {step, L, o} tuples
+                const indexEntries = this.steps.map(step => {
+                    const c_or = theta * step.o - step.r;
+                    const L = c_or / normFactor;
+                    return { step, L, o: step.o };
+                });
+
+                // Sort by (L, o) ascending
+                this.sortedByL = indexEntries.sort((a, b) => {
+                    if (a.L !== b.L) return a.L - b.L;
+                    return a.o - b.o;
+                });
+            }
+
+            findFirstDescentTerm(searchStep) {
+                // Find the first descent term where:
+                // 1. x < x_search
+                // 2. L < L_search
+                // 3. o < o_search
+                // Among all candidates, return the one with LARGEST L (closest to L_search from below)
+
+                if (!this.sortedByL || this.sortedByL.length === 0) return null;
+
+                const theta = 2 - Math.log2(3);
+                const normFactor = Math.sqrt(1 + theta * theta);
+                const c_or = theta * searchStep.o - searchStep.r;
+                const searchL = c_or / normFactor;
+                const searchO = searchStep.o;
+                const searchX = searchStep.x;
+
+                console.log(`Searching for descent term of x=${searchX}, o=${searchO}, L=${searchL.toFixed(3)}`);
+
+                // Binary search to find the rightmost entry with L < searchL
+                // This gives us the largest L that is still less than searchL
+                let left = 0;
+                let right = this.sortedByL.length - 1;
+                let candidateIdx = -1;
+
+                while (left <= right) {
+                    const mid = Math.floor((left + right) / 2);
+
+                    if (this.sortedByL[mid].L < searchL) {
+                        // This could be a candidate, but check if there's a larger L < searchL
+                        candidateIdx = mid;
+                        left = mid + 1;  // Look for larger L values
+                    } else {
+                        right = mid - 1;  // L is too large, search left
+                    }
+                }
+
+                // Now search backward from candidateIdx to find the best match
+                // We want: L < searchL, o < searchO, x < searchX, and maximize L
+                let bestCandidate = null;
+                let bestL = -Infinity;
+
+                // Search from candidateIdx backward (decreasing L)
+                for (let i = candidateIdx; i >= 0; i--) {
+                    const entry = this.sortedByL[i];
+
+                    // Since sortedByL is sorted by L ascending, once we've found a candidate,
+                    // any further entries will have smaller L, so we can stop
+                    if (bestCandidate && entry.L < bestL) break;
+
+                    // Check all three conditions
+                    if (entry.L < searchL && entry.o < searchO && entry.step.x < searchX) {
+                        if (entry.L > bestL) {
+                            bestL = entry.L;
+                            bestCandidate = entry.step;
+                        }
+                    }
+                }
+
+                if (bestCandidate) {
+                    const c_or_descent = theta * bestCandidate.o - bestCandidate.r;
+                    const L_descent = c_or_descent / normFactor;
+                    console.log(`  -> Found descent term: x=${bestCandidate.x}, o=${bestCandidate.o}, L=${L_descent.toFixed(3)}`);
+                } else {
+                    console.log(`  -> No descent term found (no step satisfying all conditions)`);
+                }
+
+                return bestCandidate;
             }
 
             // Compute v_2(n) - the 2-adic valuation (power of 2 dividing n)
@@ -747,7 +838,9 @@
                         const x = latticeTransform.toScreenX(step.o);
                         const y = latticeTransform.toScreenY(step.r);
 
-                        ctx.fillStyle = 'rgba(255, 215, 0, 0.6)';  // Semi-transparent gold
+                        // Check if this step is the descent term - color it cyan
+                        const isDescentTerm = latticeTransform.descentTerm && step.n === latticeTransform.descentTerm.n;
+                        ctx.fillStyle = isDescentTerm ? 'rgba(0, 255, 255, 0.8)' : 'rgba(255, 215, 0, 0.6)';  // Cyan for descent, gold for others
                         ctx.beginPath();
                         ctx.arc(x, y, CONFIG.pointRadius, 0, 2 * Math.PI);
                         ctx.fill();
@@ -833,16 +926,20 @@
             render(ctx, sequences, latticeTransform, rightAxisTransform) {
                 if (!rightAxisTransform) return;
 
-                ctx.fillStyle = 'rgba(255, 68, 68, 0.5)';  // Semi-transparent red
-                ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';  // Semi-transparent black stroke
-                ctx.lineWidth = 1;
-
                 for (const seq of sequences) {
                     for (const step of seq.steps) {
-                        if (step.x % 2 === 1) {
+                        // Check if this step is the descent term
+                        const isDescentTerm = latticeTransform.descentTerm && step.n === latticeTransform.descentTerm.n;
+
+                        // Show odd x values OR descent term (even if even)
+                        if (step.x % 2 === 1 || isDescentTerm) {
                             const x = latticeTransform.toScreenX(step.o);
                             const y = rightAxisTransform.toScreenY(step.lambda_m);
                             const radius = step.gamma + 3;
+
+                            ctx.fillStyle = isDescentTerm ? 'rgba(0, 255, 255, 0.7)' : 'rgba(255, 68, 68, 0.5)';  // Cyan for descent, red for others
+                            ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';  // Semi-transparent black stroke
+                            ctx.lineWidth = 1;
 
                             ctx.beginPath();
                             ctx.arc(x, y, radius, 0, 2 * Math.PI);
@@ -990,7 +1087,9 @@
                         const y = latticeTransform.toScreenY(logX);
                         const radius = step.beta + 3;
 
-                        ctx.fillStyle = 'rgba(50, 205, 50, 0.5)';  // Semi-transparent green (lime green)
+                        // Check if this step is the descent term - color it cyan
+                        const isDescentTerm = latticeTransform.descentTerm && step.n === latticeTransform.descentTerm.n;
+                        ctx.fillStyle = isDescentTerm ? 'rgba(0, 255, 255, 0.7)' : 'rgba(50, 205, 50, 0.5)';  // Cyan for descent, green for others
                         ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';  // Semi-transparent black stroke
                         ctx.lineWidth = 1;
 
@@ -1013,7 +1112,9 @@
                         const y = latticeTransform.toScreenY(negLogX);
                         const radius = 4;  // Fixed size
 
-                        ctx.fillStyle = 'rgba(50, 205, 50, 0.2)';  // Lower intensity green
+                        // Check if this step is the descent term - color it cyan
+                        const isDescentTerm = latticeTransform.descentTerm && step.n === latticeTransform.descentTerm.n;
+                        ctx.fillStyle = isDescentTerm ? 'rgba(0, 255, 255, 0.3)' : 'rgba(50, 205, 50, 0.2)';  // Cyan for descent, green for others
                         ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';  // Lower intensity stroke
                         ctx.lineWidth = 1;
 
@@ -1063,13 +1164,13 @@
                 const theta = 2 - Math.log2(3);
                 const normFactor = Math.sqrt(1 + theta * theta);
 
-                ctx.fillStyle = 'rgba(255, 0, 255, 0.5)';  // Semi-transparent magenta
-                ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
-                ctx.lineWidth = 1;
-
                 for (const seq of sequences) {
                     for (const step of seq.steps) {
-                        if (step.x % 2 === 1) {
+                        // Check if this step is the descent term
+                        const isDescentTerm = latticeTransform.descentTerm && step.n === latticeTransform.descentTerm.n;
+
+                        // Show odd x values OR descent term (even if even)
+                        if (step.x % 2 === 1 || isDescentTerm) {
                             const c_or = theta * step.o - step.r;
                             const c_x = Math.log2(step.x);
                             const epsilon = (c_or - c_x) / normFactor;
@@ -1077,6 +1178,10 @@
                             const x = latticeTransform.toScreenX(step.o);
                             const y = rightAxisTransform.toScreenY(epsilon);
                             const radius = 4; // Fixed size for epsilon points
+
+                            ctx.fillStyle = isDescentTerm ? 'rgba(0, 255, 255, 0.7)' : 'rgba(255, 0, 255, 0.5)';  // Cyan for descent, magenta for others
+                            ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                            ctx.lineWidth = 1;
 
                             ctx.beginPath();
                             ctx.arc(x, y, radius, 0, 2 * Math.PI);
@@ -1100,6 +1205,7 @@
                     scale: 1
                 };
                 this.hoveredPoint = null;
+                this.descentTerm = null;  // Descent term for hovered point
                 this.showEvenTerms = false; // Default to false - only show odd terms
 
                 // Layer management
@@ -1166,11 +1272,20 @@
                     }
 
                     this.hoveredPoint = newHoveredPoint;
+
+                    // Compute descent term for hovered point
+                    if (this.hoveredPoint && this.hoveredPoint.sequence) {
+                        this.descentTerm = this.hoveredPoint.sequence.findFirstDescentTerm(this.hoveredPoint.step);
+                    } else {
+                        this.descentTerm = null;
+                    }
+
                     this.render();
                 });
 
                 this.canvas.addEventListener('mouseleave', () => {
                     this.hoveredPoint = null;
+                    this.descentTerm = null;
                     this.tooltipPosition = null;
                     this.render();
                 });
@@ -1319,10 +1434,13 @@
                 if (this.showEvenTerms) {
                     return sequence.steps;
                 } else {
-                    // Show odd x, start, and last even in each (OE)+ sequence
+                    // Show odd x, start, last even in each (OE)+ sequence, and descent term (always visible)
                     const lastEvenIndices = new Set(sequence.getLastEvenInOEPlusIndices());
                     return sequence.steps.filter((s, idx) =>
-                        s.x % 2 === 1 || s.type === 'start' || lastEvenIndices.has(idx)
+                        s.x % 2 === 1 ||
+                        s.type === 'start' ||
+                        lastEvenIndices.has(idx) ||
+                        (this.descentTerm && s.n === this.descentTerm.n)  // Always show descent term
                     );
                 }
             }
@@ -1515,6 +1633,7 @@
                     toScreenY: this.toScreenY.bind(this),
                     getVisibleSteps: this.getVisibleSteps.bind(this),
                     hoveredPoint: this.hoveredPoint,
+                    descentTerm: this.descentTerm,  // Pass descent term to layers
                     defaultStep: this.sequences.length > 0 ? this.sequences[0].steps[0] : null,
                     getAnimatedY: this.getAnimatedY.bind(this),
                     animationT: this.currentEasedT || 0
@@ -1702,6 +1821,14 @@
 
                 // Element
                 lines.push(`x = 2^α·3^γ·m - 1 = ${step.x}`);
+
+                // First descent term (right after x)
+                if (this.descentTerm) {
+                    lines.push(`x₍fd₎ = ${this.descentTerm.x}`);
+                } else {
+                    lines.push(`x₍fd₎ = none`);
+                }
+
                 lines.push(`λₓ = log₂(x) = ${step.lambda_x.toFixed(3)}`);
 
                 // Derived parameters (in derivation order)
@@ -1726,7 +1853,7 @@
                 lines.push(`cₒ,ᵣ = θ·o - r = ${c_or.toFixed(3)}`);
                 lines.push(`cₓ = log₂(x) = ${c_x.toFixed(3)}`);
                 lines.push(`L = cₒ,ᵣ/√(1+θ²) = ${L.toFixed(3)}`);
-                lines.push(`ε = (cₒ,ᵣ-cₓ)/√(1+θ²) = ${epsilon.toFixed(3)}`);
+                lines.push(`ε = (cₒ,ᵣ-cₓ)/√(1+θ²) = ${epsilon.toFixed(3)}`)
 
                 this.ctx.font = '14px monospace';
                 const padding = 10;
@@ -1785,6 +1912,33 @@
                         this.ctx.textAlign = 'center';
                         this.ctx.fillText(line, tooltipX + boxWidth / 2, currentY);
                         this.ctx.textAlign = 'left';
+                    } else if (line.includes('x₍fd₎')) {
+                        // Special handling for x with subscript fd
+                        // Parse: "x₍fd₎ = value" -> draw x normally, fd as subscript, then " = value"
+                        const parts = line.split('x₍fd₎');
+                        let x = tooltipX + padding;
+
+                        // Draw prefix (usually empty)
+                        if (parts[0]) {
+                            this.ctx.fillText(parts[0], x, currentY);
+                            x += this.ctx.measureText(parts[0]).width;
+                        }
+
+                        // Draw 'x' in normal font
+                        this.ctx.font = '14px monospace';
+                        this.ctx.fillText('x', x, currentY);
+                        x += this.ctx.measureText('x').width;
+
+                        // Draw 'fd' as subscript (smaller font, offset down)
+                        this.ctx.font = '10px monospace';
+                        this.ctx.fillText('fd', x, currentY + 6);  // Offset down by 6px
+                        x += this.ctx.measureText('fd').width;
+
+                        // Draw rest of line (e.g., " = 40")
+                        this.ctx.font = '14px monospace';
+                        if (parts[1]) {
+                            this.ctx.fillText(parts[1], x, currentY);
+                        }
                     } else {
                         this.ctx.fillText(line, tooltipX + padding, currentY);
                     }
@@ -2067,22 +2221,44 @@
                 const epsilon = (c_or - c_x) / normFactor;
 
                 const lines = [];
-                lines.push(`x = ${step.x}`);
-                lines.push(`o = ${step.o}, r = ${step.r}, e = ${step.e}`);
-                lines.push(`α = ${step.alpha}, γ = ${step.gamma}, β = ${step.beta}`);
-                lines.push(`m = ${step.m.toFixed(4)}`);
-                lines.push(`λₓ = log₂(x) = ${step.lambda_x.toFixed(4)}`);
-                lines.push(`λₘ = log₃(m) = ${step.lambda_m.toFixed(4)}`);
+
+                // Lattice position
+                lines.push(`o = ${step.o}`);
+                lines.push(`r = ${step.r}`);
+                lines.push(`e = ${step.e}`);
+
+                // Element
+                lines.push(`x = 2^α·3^γ·m - 1 = ${step.x}`);
+
+                // First descent term (right after x)
+                const descentTerm = sequence.findFirstDescentTerm(step);
+                if (descentTerm) {
+                    lines.push(`x<sub>fd</sub> = ${descentTerm.x}`);
+                } else {
+                    lines.push(`x<sub>fd</sub> = none`);
+                }
+
+                lines.push(`λₓ = log₂(x) = ${step.lambda_x.toFixed(3)}`);
+
+                // Derived parameters (in derivation order)
+                lines.push(`α = v₂(x+1) = ${step.alpha}`);
+                lines.push(`γ = v₃(x+1) = ${step.gamma}`);
+                lines.push(`m = (x+1)/(2^α·3^γ) = ${step.m}`);
+                lines.push(`λₘ = log₃(m) = ${step.lambda_m.toFixed(3)}`);
+                lines.push(`β = v₂(${step.x % 2 === 0 ? 'x' : '3x+1'}) = ${step.beta}`);
                 lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
                 lines.push(`k = 2^e - 3^o·x = ${step.k}`);
-                lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(4)}`);
+                lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(3)}`);
+
+                // Theta-line intercepts and distances
                 lines.push(`θ = 2 - log₂(3) = ${theta.toFixed(4)}`);
                 lines.push(`cₒ,ᵣ = θ·o - r = ${c_or.toFixed(3)}`);
                 lines.push(`cₓ = log₂(x) = ${c_x.toFixed(3)}`);
                 lines.push(`L = cₒ,ᵣ/√(1+θ²) = ${L.toFixed(3)}`);
-                lines.push(`ε = (cₒ,ᵣ-cₓ)/√(1+θ²) = ${epsilon.toFixed(3)}`);
+                lines.push(`ε = (cₒ,ᵣ-cₓ)/√(1+θ²) = ${epsilon.toFixed(3)}`)
 
-                document.getElementById('infoContent').textContent = lines.join('\n');
+                // Use innerHTML instead of textContent to render HTML tags like <sub>
+                document.getElementById('infoContent').innerHTML = lines.join('<br>');
                 document.getElementById('infoPanel').style.display = 'block';
             }
 

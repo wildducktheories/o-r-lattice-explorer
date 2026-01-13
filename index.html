@@ -199,7 +199,7 @@
             <div class="control-row">
                 <label for="x0Input">Starting value (x₀):</label>
                 <input type="number" id="x0Input" value="27" min="1" step="1">
-                <button onclick="app.plotSequence()">Plot Sequence</button>
+                <button onclick="app.anchor_k = null; app.plotSequence()">Plot Sequence</button>
                 <button onclick="app.clearCanvas()">Clear</button>
             </div>
             <div class="control-row">
@@ -641,6 +641,25 @@
                 };
             }
 
+            getOEPrefixWithKEvens(k) {
+                // Extract OE prefix with exactly k E's from the sequence
+                const oeString = this.getOEString();
+                let evenCount = 0;
+                let prefix = '';
+
+                for (let i = 0; i < oeString.length; i++) {
+                    prefix += oeString[i];
+                    if (oeString[i] === 'E') {
+                        evenCount++;
+                        if (evenCount === k) {
+                            break;
+                        }
+                    }
+                }
+
+                return prefix;
+            }
+
             getLastEvenInOEPlusIndices() {
                 // Returns step indices of the last even term in each (OE)+ sequence
                 // These should be shown even when "Show even terms" is unchecked
@@ -666,8 +685,8 @@
             let parts = [`k=${k}:`];
 
             if (prev) {
-                parts.push(`<a href="?x=${prev}" class="congruence-link">←</a>`);
-                parts.push(`<a href="?x=${prev}" class="congruence-link">${prev}</a>`);
+                parts.push(`<a href="?x=${prev}&anchor_k=${k}" class="congruence-link">←</a>`);
+                parts.push(`<a href="?x=${prev}&anchor_k=${k}" class="congruence-link">${prev}</a>`);
             }
 
             parts.push('|');
@@ -675,8 +694,8 @@
             parts.push('|');
 
             if (next) {
-                parts.push(`<a href="?x=${next}" class="congruence-link">${next}</a>`);
-                parts.push(`<a href="?x=${next}" class="congruence-link">→</a>`);
+                parts.push(`<a href="?x=${next}&anchor_k=${k}" class="congruence-link">${next}</a>`);
+                parts.push(`<a href="?x=${next}&anchor_k=${k}" class="congruence-link">→</a>`);
             }
 
             return parts.join(' ');
@@ -2202,10 +2221,11 @@
                 this.heatmapRenderer = new HeatmapRenderer('heatmapCanvas');
                 this.currentSequence = null;
                 this.isInitialLoad = true;
+                this.anchor_k = null;  // Track congruence navigation anchor
 
                 // Set up double-click handler
                 this.renderer.onPointDoubleClick = (x) => {
-                    this.loadSequenceForX(x);
+                    this.loadSequenceForX(x, null);  // Clear anchor when double-clicking
                 };
 
                 // Set up animation complete handler
@@ -2215,15 +2235,18 @@
 
                 // Handle browser back/forward buttons
                 window.addEventListener('popstate', (e) => {
-                    // Get x value from state or URL
-                    let x;
+                    // Get x and anchor_k from state or URL
+                    let x, anchor_k;
                     if (e.state && e.state.x) {
                         x = e.state.x;
+                        anchor_k = e.state.anchor_k;
                     } else {
                         const urlParams = new URLSearchParams(window.location.search);
                         x = parseInt(urlParams.get('x')) || 27;
+                        anchor_k = parseInt(urlParams.get('anchor_k'));
                     }
 
+                    this.anchor_k = !isNaN(anchor_k) ? anchor_k : null;
                     document.getElementById('x0Input').value = x;
                     // Don't update history when handling popstate
                     this.isInitialLoad = true;
@@ -2238,14 +2261,21 @@
             }
 
             loadFromURL() {
-                // Read x from query string
+                // Read x and anchor_k from query string
                 const urlParams = new URLSearchParams(window.location.search);
                 const xParam = urlParams.get('x');
+                const anchorKParam = urlParams.get('anchor_k');
+
                 if (xParam) {
                     const x = parseInt(xParam);
                     if (!isNaN(x) && x > 0) {
                         document.getElementById('x0Input').value = x;
                     }
+                }
+
+                if (anchorKParam) {
+                    const anchor_k = parseInt(anchorKParam);
+                    this.anchor_k = !isNaN(anchor_k) ? anchor_k : null;
                 }
             }
 
@@ -2255,26 +2285,41 @@
                     if (e.target.classList.contains('congruence-link')) {
                         e.preventDefault();
                         const href = e.target.getAttribute('href');
-                        const match = href.match(/\?x=(\d+)/);
-                        if (match) {
-                            const x = parseInt(match[1]);
-                            this.loadSequenceForX(x);
+
+                        // Parse both x and anchor_k from URL
+                        const url = new URL(href, window.location.origin);
+                        const x = parseInt(url.searchParams.get('x'));
+                        const anchor_k = parseInt(url.searchParams.get('anchor_k'));
+
+                        if (!isNaN(x)) {
+                            this.loadSequenceForX(x, anchor_k);
                         }
                     }
                 });
             }
 
-            updateURL(x) {
+            updateURL(x, anchor_k = null) {
                 // Update URL without reloading the page, storing state for back button
                 const url = new URL(window.location);
                 url.searchParams.set('x', x);
 
+                if (anchor_k !== null && !isNaN(anchor_k)) {
+                    url.searchParams.set('anchor_k', anchor_k);
+                } else {
+                    url.searchParams.delete('anchor_k');
+                }
+
+                const state = { x: x };
+                if (anchor_k !== null && !isNaN(anchor_k)) {
+                    state.anchor_k = anchor_k;
+                }
+
                 if (this.isInitialLoad) {
                     // Replace state on initial load to avoid creating extra history entry
-                    window.history.replaceState({ x: x }, '', url);
+                    window.history.replaceState(state, '', url);
                 } else {
                     // Push new state for user-initiated changes
-                    window.history.pushState({ x: x }, '', url);
+                    window.history.pushState(state, '', url);
                 }
             }
 
@@ -2293,6 +2338,24 @@
 
                 // Display OE blocks - each with congruence navigation
                 const blocks = sequence.findOEBlocks();
+                const allLines = [];
+
+                // Add anchor congruence if present
+                if (this.anchor_k !== null) {
+                    const x0 = sequence.steps[0].x;
+                    const anchorPrefix = sequence.getOEPrefixWithKEvens(this.anchor_k);
+                    const anchorCongruences = sequence.getCongruences(x0, this.anchor_k);
+
+                    // Anchor pattern line
+                    const anchorPatternLine = `anchor: ${anchorPrefix}`;
+
+                    // Congruence navigation line (nested)
+                    const anchorCongLine = formatCongruenceHTML(anchorCongruences);
+
+                    allLines.push(`${anchorPatternLine}<br>&nbsp;&nbsp;${anchorCongLine}`);
+                }
+
+                // Add maximal OE blocks
                 if (blocks.length > 0) {
                     const blockLines = blocks.map((b, i) => {
                         const startStep = sequence.steps[b.start];
@@ -2307,9 +2370,14 @@
 
                         return `${patternLine}<br>&nbsp;&nbsp;${congLine}`;
                     });
-                    document.getElementById('oeBlocks').innerHTML = blockLines.join('<br><br>');
+                    allLines.push(...blockLines);
+                    document.getElementById('oeBlocks').innerHTML = allLines.join('<br><br>');
                 } else {
-                    document.getElementById('oeBlocks').textContent = 'None found';
+                    if (allLines.length > 0) {
+                        document.getElementById('oeBlocks').innerHTML = allLines.join('<br><br>');
+                    } else {
+                        document.getElementById('oeBlocks').textContent = 'None found';
+                    }
                 }
 
                 // Update x₀ info panel
@@ -2421,8 +2489,8 @@
                     this.heatmapRenderer.render(sequence);
                     this.updateInfo(sequence);
 
-                    // Update URL to reflect current x value
-                    this.updateURL(x0);
+                    // Update URL to reflect current x value and anchor_k
+                    this.updateURL(x0, this.anchor_k);
 
                 } catch (error) {
                     this.showError(error.message);
@@ -2430,8 +2498,9 @@
                 }
             }
 
-            loadSequenceForX(x) {
-                // Called when double-clicking a lattice point
+            loadSequenceForX(x, anchor_k = null) {
+                // Called when navigating to a different x value
+                this.anchor_k = !isNaN(anchor_k) && anchor_k !== null ? anchor_k : null;
                 document.getElementById('x0Input').value = x;
                 this.plotSequence();
             }
@@ -2447,6 +2516,7 @@
             }
 
             loadExample(x0) {
+                this.anchor_k = null;  // Clear anchor when loading example
                 document.getElementById('x0Input').value = x0;
                 this.plotSequence();
             }

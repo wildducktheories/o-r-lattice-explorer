@@ -74,6 +74,73 @@ Hover over any lattice point to see detailed information:
 - L = cₒ,ᵣ/√(1+θ²): normal distance from origin line
 - ε = (cₒ,ᵣ - cₓ)/√(1+θ²): error between estimators
 
+### Congruence Navigation
+
+The visualizer supports navigating along **congruence families** - sets of values that share identical Collatz sequence structure up to the first k even terms.
+
+#### What are Congruences?
+
+For a given value x and parameter k, the congruent values are:
+- **x - 2^k** (previous congruent value)
+- **x** (current value)
+- **x + 2^k** (next congruent value)
+
+These values have identical sequence patterns for the first k even steps, making them structurally related in the Collatz dynamics.
+
+#### Two Types of Congruences
+
+**1. OE Block Congruences**
+
+Displayed in the OE Blocks panel for each maximal ((OE)+E+) block:
+- **k** = number of E's (even terms) in the block pattern
+- Example: For pattern "OEOEE", k=3, so congruent values are x±8
+
+Format:
+```
+x=27: OEOEE
+  k=3: ← 19 | 27 | 35 →
+```
+
+**2. First Descent (x_fd) Congruences**
+
+Displayed in the X₀ info panel below the x_fd value:
+- **k** = 2(o_x - o_fd) - (r_x - r_fd)
+- Represents the number of even steps in the path between x and its first descent term
+- First descent term: point with x < x_search, L < L_search, o < o_search (maximizing o)
+
+#### Anchor Navigation
+
+When you click a congruence link (e.g., k=3: ← 19), the URL includes `?x=19&anchor_k=3` and the new page displays:
+
+```
+anchor: OEOEE
+  k=3: ← 11 | 19 | 27 →
+
+x=19: OEOEEE
+  k=4: ← 3 | 19 | 35 →
+```
+
+The **anchor** section shows:
+- The OE prefix of the current sequence up to k E's
+- The congruence navigation path you followed to arrive here
+- Allows you to continue navigating along the same k-congruence thread
+
+The maximal OE blocks follow below with their own congruence values.
+
+#### How to Use
+
+1. **Navigate blocks**: Click any congruence link to jump to a structurally similar value
+2. **Follow threads**: The anchor_k parameter persists, letting you explore an entire congruence family
+3. **Browser history**: Back/forward buttons work correctly, preserving anchor_k context
+4. **Reset anchor**: Click "Plot Sequence" or an example button to start fresh exploration
+
+#### Why This Matters
+
+Congruence navigation reveals:
+- **Structural invariants**: Patterns that persist across value transformations
+- **Periodic behavior**: How sequences evolve as you navigate x → x±2^k
+- **Family relationships**: Values that share common Collatz sub-trajectories
+
 ### Starting Value Info Panel
 
 Displays comprehensive properties for the sequence's starting value x₀:
@@ -149,7 +216,9 @@ where:
 1. **Load a sequence**: Enter a starting value x₀ and click "Plot Sequence"
 2. **Toggle layers**: Use checkboxes to show/hide different visualizations
 3. **Explore points**: Hover over lattice points to see detailed analysis
-4. **Navigate sequences**: Double-click any lattice point to load its sequence
+4. **Navigate sequences**:
+   - Double-click any lattice point to load its sequence
+   - Click congruence links (← prev | current | next →) to explore structurally similar values
    - Browser history is updated, allowing back/forward navigation between sequences
 5. **Animate transformation**: Click "Animate to λₓ" to visualize the geometric relationship
    - Original gold points remain at (o, r) positions

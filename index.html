@@ -160,22 +160,36 @@
             color: #88c5ff;
         }
 
-        .legend {
+        .anchor-section {
+            margin-top: 10px;
+            padding: 10px 15px;
+            background: #333;
+            border-radius: 4px;
+            border: 1px solid #4a9eff;
+        }
+
+        .anchor-label {
+            font-weight: 500;
+            color: #4a9eff;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+
+        .anchor-content {
             display: flex;
             gap: 20px;
-            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            color: #e0e0e0;
         }
 
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        .anchor-nav {
+            margin-top: 8px;
+            font-family: 'Courier New', monospace;
+            color: #e0e0e0;
         }
 
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            border-radius: 3px;
+        canvas {
+            user-select: none;
         }
 
         .error {
@@ -234,20 +248,15 @@
 
         <div class="canvas-container">
             <canvas id="latticeCanvas" width="1200" height="800"></canvas>
-            <div class="legend">
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #ff6b6b;"></div>
-                    <span>O step (3x+1)/2: moves (o,r) → (o-1, r-1)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: #4a9eff;"></div>
-                    <span>E step x/2^β (divide out all 2s): moves (o,r) → (o, r+β-2)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background: linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #00ff00); border: 2px dashed #fff;"></div>
-                    <span>Colored boxes: ((OE)+E+) blocks accelerate multiple O steps</span>
-                </div>
+        </div>
+
+        <div id="anchorSection" class="anchor-section" style="display: none;">
+            <div class="anchor-label">Anchor</div>
+            <div class="anchor-content">
+                <span id="anchorK">k = -</span>
+                <span id="anchorOEPrefix">-</span>
             </div>
+            <div class="anchor-nav" id="anchorNav"></div>
         </div>
 
         <div id="infoPanel" class="info-panel" style="display: none;">
@@ -1323,6 +1332,16 @@
                 // or one of: 'top-left', 'top-right', 'bottom-left', 'bottom-right'
                 this.tooltipPosition = null;
 
+                // Selection state for drag-to-select (horizontal bands)
+                this.isSelecting = false;
+                this.selectionStart = null;  // {x, y} screen coordinates
+                this.selectionEnd = null;    // {x, y} screen coordinates
+                this.selectionRect = null;   // {x, y, width, height}
+                this.onSelectionComplete = null;  // Callback when selection completes
+
+                // Anchor k value for highlighting (derived range computed on render)
+                this.anchor_k = null;
+
                 this.initializeLayers();
                 this.setupEventListeners();
             }
@@ -1358,10 +1377,47 @@
             }
 
             setupEventListeners() {
+                // Mousedown - start selection
+                this.canvas.addEventListener('mousedown', (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const mouseX = e.clientX - rect.left;
+                    const mouseY = e.clientY - rect.top;
+
+                    this.isSelecting = true;
+                    this.selectionStart = { x: mouseX, y: mouseY };
+                    this.selectionEnd = { x: mouseX, y: mouseY };
+                    this.updateSelectionRect();
+                });
+
+                // Mouseup - complete selection
+                this.canvas.addEventListener('mouseup', (e) => {
+                    if (this.isSelecting) {
+                        this.isSelecting = false;
+
+                        // Only process if it was a real horizontal drag (not just a click)
+                        if (this.selectionRect && this.selectionRect.width > 5) {
+                            this.processSelection();
+                        }
+
+                        this.selectionRect = null;
+                        this.selectionStart = null;
+                        this.selectionEnd = null;
+                        this.render();
+                    }
+                });
+
                 this.canvas.addEventListener('mousemove', (e) => {
                     const rect = this.canvas.getBoundingClientRect();
                     const mouseX = e.clientX - rect.left;
                     const mouseY = e.clientY - rect.top;
+
+                    // Handle selection drag
+                    if (this.isSelecting) {
+                        this.selectionEnd = { x: mouseX, y: mouseY };
+                        this.updateSelectionRect();
+                        this.render();
+                        return; // Skip hover logic while selecting
+                    }
 
                     const newHoveredPoint = this.findPointAtPosition(mouseX, mouseY);
 
@@ -1384,6 +1440,14 @@
                 });
 
                 this.canvas.addEventListener('mouseleave', () => {
+                    // Cancel selection if mouse leaves canvas
+                    if (this.isSelecting) {
+                        this.isSelecting = false;
+                        this.selectionRect = null;
+                        this.selectionStart = null;
+                        this.selectionEnd = null;
+                    }
+
                     this.hoveredPoint = null;
                     this.descentTerm = null;
                     this.tooltipPosition = null;
@@ -1527,6 +1591,203 @@
                     }
                 }
                 return null;
+            }
+
+            // Selection helper methods
+            updateSelectionRect() {
+                if (!this.selectionStart || !this.selectionEnd) {
+                    this.selectionRect = null;
+                    return;
+                }
+
+                const x = Math.min(this.selectionStart.x, this.selectionEnd.x);
+                const y = Math.min(this.selectionStart.y, this.selectionEnd.y);
+                const width = Math.abs(this.selectionEnd.x - this.selectionStart.x);
+                const height = Math.abs(this.selectionEnd.y - this.selectionStart.y);
+
+                this.selectionRect = { x, y, width, height };
+            }
+
+            findPointsInSelection() {
+                if (!this.selectionRect) return [];
+
+                const { x, width } = this.selectionRect;
+                const points = [];
+
+                for (const seq of this.sequences) {
+                    const visibleSteps = this.getVisibleSteps(seq);
+
+                    for (const step of visibleSteps) {
+                        const screenX = this.toScreenX(step.o);
+
+                        // Check if point is within horizontal selection range
+                        if (screenX >= x && screenX <= x + width) {
+                            points.push({ step, sequence: seq });
+                        }
+                    }
+                }
+
+                return points;
+            }
+
+            processSelection() {
+                const selectedPoints = this.findPointsInSelection();
+
+                if (selectedPoints.length === 0) return;
+                if (this.sequences.length === 0) return;
+
+                const sequence = this.sequences[0];
+
+                // Find rightmost point (highest o value) - defines the block start
+                const rightmostPoint = selectedPoints.reduce((max, p) =>
+                    p.step.o > max.step.o ? p : max
+                );
+
+                // Find leftmost point (lowest o value) - used to find first complete block
+                const leftmostPoint = selectedPoints.reduce((min, p) =>
+                    p.step.o < min.step.o ? p : min
+                );
+
+                // The rightmost odd term becomes x₀
+                // Find the rightmost odd at or before the rightmost selected point
+                let newX = null;
+                let rightmostOddN = null;
+                for (let i = rightmostPoint.step.n; i >= 0; i--) {
+                    const step = sequence.steps[i];
+                    if (step.x % 2 === 1) {
+                        newX = step.x;
+                        rightmostOddN = i;
+                        break;
+                    }
+                }
+
+                if (newX === null) return;
+
+                // Find the first complete block contained within the selection
+                // A complete block means the full (OE)+E+ pattern including all trailing E's
+                const blocks = sequence.findOEBlocks();
+                let anchorBoundaryN = null;
+
+                for (const block of blocks) {
+                    // Block indices in step space (OE string index + 1)
+                    const blockStartStepN = block.start + 1;
+                    const blockEndStepN = block.end + 1;  // Last E in E+ portion
+
+                    // Check if the FULL block (including E+) is contained within selection
+                    // Block must start at or after leftmost and end at or before rightmost
+                    if (blockStartStepN >= leftmostPoint.step.n &&
+                        blockEndStepN <= rightmostPoint.step.n) {
+                        // Use the end of the E+ portion as our anchor boundary
+                        anchorBoundaryN = blockEndStepN;
+                        break; // First complete block found
+                    }
+                }
+
+                // If no complete block found, use the leftmost odd in selection
+                if (anchorBoundaryN === null) {
+                    const oddPoints = selectedPoints.filter(p => p.step.x % 2 === 1);
+                    if (oddPoints.length === 0) return;
+
+                    const leftmostOdd = oddPoints.reduce((min, p) =>
+                        p.step.o < min.step.o ? p : min
+                    );
+                    anchorBoundaryN = leftmostOdd.step.n;
+                }
+
+                // Count even steps between anchor boundary and rightmost odd
+                // anchorBoundaryN is to the LEFT (lower o), rightmostOddN is to the RIGHT (higher o)
+                let anchor_k = 0;
+                const startN = Math.min(anchorBoundaryN, rightmostOddN);
+                const endN = Math.max(anchorBoundaryN, rightmostOddN);
+                for (let i = startN + 1; i < endN; i++) {
+                    const step = sequence.steps[i];
+                    if (step && step.x % 2 === 0) {
+                        anchor_k++;
+                    }
+                }
+
+                // Trigger callback to application
+                if (this.onSelectionComplete) {
+                    this.onSelectionComplete(newX, anchor_k);
+                }
+            }
+
+            drawSelectionRect() {
+                if (!this.selectionRect) return;
+
+                const { x, width } = this.selectionRect;
+
+                // Draw horizontal band (full canvas height)
+                this.ctx.fillStyle = 'rgba(74, 158, 255, 0.2)';
+                this.ctx.fillRect(x, 0, width, this.canvas.height);
+
+                // Draw vertical lines at edges
+                this.ctx.strokeStyle = 'rgba(74, 158, 255, 0.8)';
+                this.ctx.lineWidth = 2;
+                this.ctx.setLineDash([5, 3]);
+                this.ctx.beginPath();
+                this.ctx.moveTo(x, 0);
+                this.ctx.lineTo(x, this.canvas.height);
+                this.ctx.moveTo(x + width, 0);
+                this.ctx.lineTo(x + width, this.canvas.height);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+            }
+
+            computeAnchorRange() {
+                // Derive anchor range from anchor_k and current sequence
+                if (this.anchor_k === null || this.anchor_k < 0) return null;
+                if (this.sequences.length === 0) return null;
+
+                const sequence = this.sequences[0];
+                const steps = sequence.steps;
+                if (steps.length === 0) return null;
+
+                // Start at step 0, count evens, find the last odd within anchor_k evens
+                let evenCount = 0;
+                let lastOddO = steps[0].o;
+
+                for (let i = 1; i < steps.length; i++) {
+                    const step = steps[i];
+                    if (step.x % 2 === 0) {
+                        evenCount++;
+                        if (evenCount > this.anchor_k) {
+                            break; // Exceeded anchor_k evens
+                        }
+                    } else {
+                        lastOddO = step.o; // Update last odd within range
+                    }
+                }
+
+                return { minO: steps[0].o, maxO: lastOddO };
+            }
+
+            drawAnchorRange() {
+                const anchorRange = this.computeAnchorRange();
+                if (!anchorRange) return;
+
+                const { minO, maxO } = anchorRange;
+                // Offset boundaries outward by 1/3 of a grid square on each side
+                // Left boundary at o_left - 1/3, right boundary at o_right + 1/3
+                const offset = this.transform.scale / 3;
+                const leftX = this.toScreenX(minO) + offset;
+                const rightX = this.toScreenX(maxO) - offset;
+                const width = rightX - leftX;
+
+                // Draw semi-transparent highlight band
+                this.ctx.fillStyle = 'rgba(74, 158, 255, 0.15)';
+                this.ctx.fillRect(leftX, 0, width, this.canvas.height);
+
+                // Draw solid vertical lines at edges
+                this.ctx.strokeStyle = 'rgba(74, 158, 255, 0.5)';
+                this.ctx.lineWidth = 1;
+                this.ctx.setLineDash([]);
+                this.ctx.beginPath();
+                this.ctx.moveTo(leftX, 0);
+                this.ctx.lineTo(leftX, this.canvas.height);
+                this.ctx.moveTo(rightX, 0);
+                this.ctx.lineTo(rightX, this.canvas.height);
+                this.ctx.stroke();
             }
 
             getVisibleSteps(sequence) {
@@ -1778,6 +2039,14 @@
 
                 // Draw lambda_x reference line
                 this.drawLambdaXLine(rightAxisTransform);
+
+                // Draw anchor range highlight (persistent selection)
+                this.drawAnchorRange();
+
+                // Draw selection rectangle if selecting
+                if (this.isSelecting && this.selectionRect) {
+                    this.drawSelectionRect();
+                }
 
                 // Draw tooltip last (on top)
                 if (this.hoveredPoint) {
@@ -2233,6 +2502,14 @@
                     this.updateAnimateButton();
                 };
 
+                // Set up selection complete handler
+                this.renderer.onSelectionComplete = (x, anchor_k) => {
+                    document.getElementById('x0Input').value = x;
+                    this.anchor_k = anchor_k;
+                    this.plotSequence();
+                    this.updateAnchorSection();
+                };
+
                 // Handle browser back/forward buttons
                 window.addEventListener('popstate', (e) => {
                     // Get x and anchor_k from state or URL
@@ -2339,21 +2616,6 @@
                 // Display OE blocks - each with congruence navigation
                 const blocks = sequence.findOEBlocks();
                 const allLines = [];
-
-                // Add anchor congruence if present
-                if (this.anchor_k !== null) {
-                    const x0 = sequence.steps[0].x;
-                    const anchorPrefix = sequence.getOEPrefixWithKEvens(this.anchor_k);
-                    const anchorCongruences = sequence.getCongruences(x0, this.anchor_k);
-
-                    // Anchor pattern line
-                    const anchorPatternLine = `anchor: ${anchorPrefix}`;
-
-                    // Congruence navigation line (nested)
-                    const anchorCongLine = formatCongruenceHTML(anchorCongruences);
-
-                    allLines.push(`${anchorPatternLine}<br>&nbsp;&nbsp;${anchorCongLine}`);
-                }
 
                 // Add maximal OE blocks
                 if (blocks.length > 0) {
@@ -2482,6 +2744,9 @@
                         return;
                     }
 
+                    // Pass anchor_k to renderer for highlighting
+                    this.renderer.anchor_k = this.anchor_k;
+
                     const sequence = new CollatzSequence(x0);
                     this.currentSequence = sequence;
                     this.renderer.clear();
@@ -2492,10 +2757,34 @@
                     // Update URL to reflect current x value and anchor_k
                     this.updateURL(x0, this.anchor_k);
 
+                    // Update anchor section display
+                    this.updateAnchorSection();
+
                 } catch (error) {
                     this.showError(error.message);
                     console.error(error);
                 }
+            }
+
+            updateAnchorSection() {
+                const section = document.getElementById('anchorSection');
+
+                if (this.anchor_k === null || !this.currentSequence) {
+                    section.style.display = 'none';
+                    return;
+                }
+
+                section.style.display = 'block';
+                document.getElementById('anchorK').textContent = `k = ${this.anchor_k}`;
+
+                const prefix = this.currentSequence.getOEPrefixWithKEvens(this.anchor_k);
+                document.getElementById('anchorOEPrefix').textContent = prefix;
+
+                // Add congruence navigation
+                const x0 = this.currentSequence.steps[0].x;
+                const congruences = this.currentSequence.getCongruences(x0, this.anchor_k);
+                const navHTML = formatCongruenceHTML(congruences);
+                document.getElementById('anchorNav').innerHTML = navHTML;
             }
 
             loadSequenceForX(x, anchor_k = null) {
@@ -2507,12 +2796,15 @@
 
             clearCanvas() {
                 this.renderer.clear();
+                this.renderer.anchor_k = null;
                 this.heatmapRenderer.clear();
                 this.currentSequence = null;
+                this.anchor_k = null;
                 document.getElementById('oeSequence').textContent = '-';
                 document.getElementById('seqLength').textContent = '-';
                 document.getElementById('oeBlocks').textContent = '-';
                 document.getElementById('infoPanel').style.display = 'none';
+                document.getElementById('anchorSection').style.display = 'none';
             }
 
             loadExample(x0) {

@@ -237,7 +237,6 @@
                 <label><input type="checkbox" id="layerAxes" checked onchange="app.toggleLayer('Axes')"> Axes</label>
                 <label><input type="checkbox" id="layerPath" checked onchange="app.toggleLayer('Path')"> Path</label>
                 <label><input type="checkbox" id="layerBlocks" onchange="app.toggleLayer('OE Blocks')"> OE Blocks</label>
-                <label><input type="checkbox" id="layerMValue" onchange="app.toggleLayer('M Values')"> λₘ-layer</label>
                 <label><input type="checkbox" id="layerXValue" checked onchange="app.toggleLayer('X Values')"> λₓ-layer</label>
                 <label><input type="checkbox" id="layerEpsilon" onchange="app.toggleLayer('Epsilon')"> ε-layer</label>
                 <button id="animateButton" onclick="app.toggleAnimation()" style="margin-left: 20px;">Animate to λₓ</button>
@@ -364,9 +363,8 @@
                     // Compute m = (x+1) / (2^α * 3^γ)
                     tempSteps[i].m = (currentX + 1) / (Math.pow(2, tempSteps[i].alpha) * Math.pow(3, tempSteps[i].gamma));
 
-                    // Compute lambda_x = log_2(x) and lambda_m = log_3(m)
+                    // Compute lambda_x = log_2(x)
                     tempSteps[i].lambda_x = Math.log2(currentX);
-                    tempSteps[i].lambda_m = Math.log(tempSteps[i].m) / Math.log(3);
 
                     if (i === tempSteps.length - 1) {
                         // At x=1: o=0, e=0, β=0
@@ -404,6 +402,29 @@
 
                     // Compute lambda_k = log_2(k)
                     tempSteps[i].lambda_k = Math.log2(Math.abs(tempSteps[i].k));
+
+                    // For even x, compute nu = v_2(x) and work with odd part
+                    // For odd x, nu = 0
+                    if (currentX % 2 === 0) {
+                        tempSteps[i].nu = this.v2(currentX);
+                        const xOdd = currentX / Math.pow(2, tempSteps[i].nu);
+                        // Compute parameters based on odd part
+                        const alphaOdd = this.v2(xOdd + 1);
+                        const gammaOdd = this.v3(xOdd + 1);
+                        const mOdd = (xOdd + 1) / (Math.pow(2, alphaOdd) * Math.pow(3, gammaOdd));
+                        const betaOdd = tempSteps[i + 1] ? tempSteps[i + 1].beta : 0;
+                        const twoPowBeta = Math.pow(2, betaOdd);
+                        tempSteps[i].rho = mOdd % twoPowBeta;
+                        const oddPart = Math.floor(mOdd / twoPowBeta);  // This is (2t+1)
+                        tempSteps[i].t = (oddPart - 1) / 2;
+                    } else {
+                        tempSteps[i].nu = 0;
+                        // Compute rho and t from m = rho + 2^beta * (2t+1)
+                        const twoPowBeta = Math.pow(2, tempSteps[i].beta);
+                        tempSteps[i].rho = tempSteps[i].m % twoPowBeta;
+                        const oddPart = Math.floor(tempSteps[i].m / twoPowBeta);  // This is (2t+1)
+                        tempSteps[i].t = (oddPart - 1) / 2;
+                    }
                 }
 
                 this.steps = tempSteps;
@@ -1010,56 +1031,6 @@
             }
         }
 
-        // M Value layer - λ_m vs o with γ as circle size (right-axis)
-        class MValueLayer extends Layer {
-            constructor(enabled = false) {
-                super('M Values', enabled);
-                this.usesRightAxis = true;
-                this.rightAxisLabel = 'λₘ = log₃(m)';
-            }
-
-            getRightAxisBounds(sequences) {
-                let minLambdaM = Infinity;
-                let maxLambdaM = -Infinity;
-                for (const seq of sequences) {
-                    for (const step of seq.steps) {
-                        if (step.x % 2 === 1) {
-                            minLambdaM = Math.min(minLambdaM, step.lambda_m);
-                            maxLambdaM = Math.max(maxLambdaM, step.lambda_m);
-                        }
-                    }
-                }
-                return { min: minLambdaM, max: maxLambdaM };
-            }
-
-            render(ctx, sequences, latticeTransform, rightAxisTransform) {
-                if (!rightAxisTransform) return;
-
-                for (const seq of sequences) {
-                    for (const step of seq.steps) {
-                        // Check if this step is the descent term
-                        const isDescentTerm = latticeTransform.descentTerm && step.n === latticeTransform.descentTerm.n;
-
-                        // Show odd x values OR descent term (even if even)
-                        if (step.x % 2 === 1 || isDescentTerm) {
-                            const x = latticeTransform.toScreenX(step.o);
-                            const y = rightAxisTransform.toScreenY(step.lambda_m);
-                            const radius = step.gamma + 3;
-
-                            ctx.fillStyle = isDescentTerm ? 'rgba(0, 255, 255, 0.7)' : 'rgba(255, 68, 68, 0.5)';  // Cyan for descent, red for others
-                            ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';  // Semi-transparent black stroke
-                            ctx.lineWidth = 1;
-
-                            ctx.beginPath();
-                            ctx.arc(x, y, radius, 0, 2 * Math.PI);
-                            ctx.fill();
-                            ctx.stroke();
-                        }
-                    }
-                }
-            }
-        }
-
         // X Value layer - plots at (o, log₂(x)) on left axis with β as circle size
         // Also draws mirrored plot at (o, -log₂(x)) with fixed size and lower intensity
         class XValueLayer extends Layer {
@@ -1355,7 +1326,6 @@
                 this.addLayer(new XValueLayer());
 
                 // Right-axis layers
-                this.addRightAxisLayer(new MValueLayer());
                 this.addRightAxisLayer(new EpsilonLayer());
             }
 
@@ -2188,8 +2158,12 @@
                 lines.push(`r = ${step.r}`);
                 lines.push(`e = ${step.e}`);
 
-                // Element
-                lines.push(`x = 2^α·3^γ·m - 1 = ${step.x}`);
+                // Element - include 2^ν factor for even values
+                if (step.x % 2 === 0) {
+                    lines.push(`x = 2^ν·(2^α·3^γ·(ρ + 2^β(2t+1)) - 1) = ${step.x}`);
+                } else {
+                    lines.push(`x = 2^α·3^γ·(ρ + 2^β(2t+1)) - 1 = ${step.x}`);
+                }
 
                 // First descent term (right after x)
                 if (this.descentTerm) {
@@ -2201,11 +2175,12 @@
                 lines.push(`λₓ = log₂(x) = ${step.lambda_x.toFixed(3)}`);
 
                 // Derived parameters (in derivation order)
+                lines.push(`ν = v₂(x) = ${step.nu}`);
                 lines.push(`α = v₂(x+1) = ${step.alpha}`);
                 lines.push(`γ = v₃(x+1) = ${step.gamma}`);
-                lines.push(`m = (x+1)/(2^α·3^γ) = ${step.m}`);
-                lines.push(`λₘ = log₃(m) = ${step.lambda_m.toFixed(3)}`);
                 lines.push(`β = v₂(${step.x % 2 === 0 ? 'x' : '3x+1'}) = ${step.beta}`);
+                lines.push(`ρ = ${step.rho}`);
+                lines.push(`t = ${step.t}`);
                 lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
                 lines.push(`k = 2^e - 3^o·x = ${step.k}`);
                 lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(3)}`);
@@ -2665,8 +2640,12 @@
                 lines.push(`r = ${step.r}`);
                 lines.push(`e = ${step.e}`);
 
-                // Element
-                lines.push(`x = 2^α·3^γ·m - 1 = ${step.x}`);
+                // Element - include 2^ν factor for even values
+                if (step.x % 2 === 0) {
+                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>·3<sup>γ</sup>·(ρ + 2<sup>β</sup>(2t+1)) - 1) = ${step.x}`);
+                } else {
+                    lines.push(`x = 2<sup>α</sup>·3<sup>γ</sup>·(ρ + 2<sup>β</sup>(2t+1)) - 1 = ${step.x}`);
+                }
 
                 // First descent term (right after x)
                 const descentTerm = sequence.findFirstDescentTerm(step);
@@ -2687,11 +2666,12 @@
                 lines.push(`λₓ = log₂(x) = ${step.lambda_x.toFixed(3)}`);
 
                 // Derived parameters (in derivation order)
+                lines.push(`ν = v₂(x) = ${step.nu}`);
                 lines.push(`α = v₂(x+1) = ${step.alpha}`);
                 lines.push(`γ = v₃(x+1) = ${step.gamma}`);
-                lines.push(`m = (x+1)/(2^α·3^γ) = ${step.m}`);
-                lines.push(`λₘ = log₃(m) = ${step.lambda_m.toFixed(3)}`);
                 lines.push(`β = v₂(${step.x % 2 === 0 ? 'x' : '3x+1'}) = ${step.beta}`);
+                lines.push(`ρ = ${step.rho}`);
+                lines.push(`t = ${step.t}`);
                 lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
                 lines.push(`k = 2^e - 3^o·x = ${step.k}`);
                 lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(3)}`);

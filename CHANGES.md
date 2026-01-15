@@ -51,29 +51,40 @@ Where m was an opaque intermediate value with λₘ = log₃(m).
 
 For **odd x**:
 ```
-x = 2^α · 3^γ · (ρ + 2^β(2t+1)) - 1
+x = 2^α · (3^γ·ρ + t·2^(β+1)) - 1
 ```
 
 For **even x**:
 ```
-x = 2^ν · (2^α · 3^γ · (ρ + 2^β(2t+1)) - 1)
+x = 2^ν · (2^α · (3^γ·ρ + t·2^(β+1)) - 1)
 ```
 
-### New Parameters
+### Parameter Definitions (in computation order)
 
 | Parameter | Definition | Description |
 |-----------|------------|-------------|
+| **α** | v₂(x+1) | Power of 2 dividing (x+1) |
+| **m** | (x+1) / 2^α | Intermediate value after extracting 2-power |
+| **β** | v₂(3^α · m - 1) | Computed from α and m |
+| **γ** | v₃(m mod 2^(β+1)) | 3-adic valuation of remainder |
 | **ν** | v₂(x) | Power of 2 dividing x (0 for odd x) |
-| **ρ** | m mod 2^β | Remainder component of m |
-| **t** | (⌊m/2^β⌋ - 1) / 2 | Index in the odd multiplier (2t+1) |
+| **ρ** | (m mod 2^(β+1)) / 3^γ | Remainder with 3-power factored out |
+| **t** | ⌊m / 2^(β+1)⌋ | Quotient in the decomposition |
+
+### Identity
+
+```
+m = 3^γ·ρ + t·2^(β+1)
+```
 
 ### Why This Matters
 
-The decomposition `m = ρ + 2^β(2t+1)` makes explicit the structure that was hidden in m:
+The decomposition `m = 3^γ·ρ + t·2^(β+1)` makes explicit the structure that was hidden in m:
 
-- **ρ** captures the "offset" within a congruence class
-- **t** indexes the odd multiplier, revealing the discrete structure
+- **ρ** captures the "offset" within a congruence class (after factoring out 3^γ)
+- **t** indexes translations within the equivalence class
 - **ν** properly handles even values by factoring out powers of 2 first
+- **γ** emerges from β, not directly from x+1
 
 For even x, parameters are computed from the odd part x/2^ν, ensuring consistent parameterization across the entire sequence.
 
@@ -101,6 +112,7 @@ This means:
 |------|-------------|
 | 41c1bcd | Add swipe-to-select for anchor region on lattice |
 | 713942f | Add ρ, t, ν parameters and remove M Values layer |
+| f621fa7 | Revise m, β, γ, ρ, t parameter formulas |
 
 ---
 

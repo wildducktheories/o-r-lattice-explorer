@@ -88,6 +88,18 @@ The decomposition `m = 3^γ·ρ + t·2^(β+1)` makes explicit the structure that
 
 For even x, parameters are computed from the odd part x/2^ν, ensuring consistent parameterization across the entire sequence.
 
+### Basic Blocks vs Natural Blocks
+
+A **basic block** is a parity sequence with exactly κ evens. It is characterized by:
+- Parameters: (α, γ, ρ, t, κ) where κ is a free parameter
+- Modulus: 2^(κ-α+1)
+
+A **natural block** is the specific block containing x where:
+- κ = α + β
+- Modulus: 2^(β+1) (since β = κ - α)
+
+The natural block is the block that x naturally belongs to based on its own parameters. Basic blocks generalize this by allowing κ to vary independently.
+
 ### Significance for Block Structure
 
 **Block translations on the O-R lattice are expressible as affine transforms derived from these parameters.**
@@ -97,7 +109,7 @@ Each increment of the free parameter **t** represents a translation of x to anot
 This means:
 - **t parameterizes equivalence classes** of lattice points with shared parity structure
 - **Linear combinations of blocks** can be derived from linear combinations of their affine structures
-- The (ρ, t, β) decomposition provides the natural coordinates for analyzing block dynamics
+- The (α, γ, ρ, t, κ) tuple provides the natural coordinates for analyzing block dynamics
 
 ### Removed
 

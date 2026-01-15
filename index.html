@@ -160,6 +160,22 @@
             color: #88c5ff;
         }
 
+        .succ-x-link {
+            color: #4a9eff;
+            text-decoration: none;
+            cursor: pointer;
+            padding: 0 2px;
+        }
+
+        .succ-x-link:hover {
+            color: #6bb3ff;
+            text-decoration: underline;
+        }
+
+        .succ-x-link:active {
+            color: #88c5ff;
+        }
+
         .anchor-section {
             margin-top: 10px;
             padding: 10px 15px;
@@ -260,7 +276,7 @@
 
         <div id="infoPanel" class="info-panel" style="display: none;">
             <div class="info-section">
-                <div class="info-label">Starting Value (x₀)</div>
+                <div class="info-label">Lattice Parameters</div>
                 <div class="info-value" id="infoContent"></div>
             </div>
         </div>
@@ -273,10 +289,6 @@
             <div class="info-section">
                 <div class="info-label">Sequence length:</div>
                 <div id="seqLength" class="info-value">-</div>
-            </div>
-            <div class="info-section">
-                <div class="info-label">((OE)+E+) blocks:</div>
-                <div id="oeBlocks" class="info-value">-</div>
             </div>
         </div>
 
@@ -2192,46 +2204,75 @@
                 const stepIndex = step.n;
                 const blockPattern = sequence.getBlockForStep(stepIndex);
 
-                // Build tooltip text lines in order: o, r, e, x, j, i, m, k
                 const lines = [];
 
                 // Optional block pattern at top
                 if (blockPattern) {
                     lines.push(blockPattern);
+                    lines.push('');
                 }
 
-                // Lattice position
+                // SECTION 1: Anchor Block Panel (static version)
+                lines.push('--- Anchor Block ---');
+
+                // GROUP A+B: Context & Lattice Position
+                lines.push(`x = ${step.x}`);
                 lines.push(`o = ${step.o}`);
                 lines.push(`r = ${step.r}`);
                 lines.push(`e = ${step.e}`);
+                const n_tooltip = 3 * step.o - step.r;
+                lines.push(`n = 3o - r = ${n_tooltip}`);
+                lines.push('');
 
-                // Element - using simplified formula
-                if (step.x % 2 === 0) {
-                    lines.push(`x = 2^ν·(2^α·(ρ + t·2^κ-α) - 1) = ${step.x}`);
-                } else {
-                    lines.push(`x = 2^α·(ρ + t·2^κ-α) - 1 = ${step.x}`);
+                // GROUP C: Block Parameters
+                lines.push(`ν = v₂(x) = ${step.nu}`);
+                const x_odd = step.nu === 0 ? step.x : Math.floor(step.x / Math.pow(2, step.nu));
+                if (step.nu > 0) {
+                    lines.push(`x / 2^ν = ${x_odd}`);
                 }
+                lines.push(`α = v₂(x/2^ν + 1) = ${step.alpha}`);
+                lines.push(`ρ = (x+1)/2^α mod 2^(κ-α) = ${step.rho}`);
+                lines.push(`t = ⌊((x+1)/2^α - ρ)/2^(κ-α)⌋ = ${step.t}`);
+                lines.push('');
 
-                // First descent term (right after x)
+                // GROUP D: Block Classification
+                lines.push(`β = v₂(3^α·(x+1)/2^α - 1) = ${step.beta}`);
+                const kappa = step.alpha + step.beta;
+                lines.push(`κ = α + β = ${kappa}`);
+                lines.push(`natural = true`);
+                lines.push('');
+
+                // GROUP E: Affine Functions
+                if (step.x % 2 === 0) {
+                    lines.push(`x(B,t) = 2^ν·(2^α·(ρ + t·2^κ-α) - 1) = ${step.x}`);
+                } else {
+                    lines.push(`x(B,t) = 2^α·(ρ + t·2^κ-α) - 1 = ${step.x}`);
+                }
+                const succ_x = (Math.pow(3, step.alpha) * step.rho - 1) / Math.pow(2, kappa - step.alpha) + Math.pow(3, step.alpha) * step.t;
+                const succ_x_display = Number.isInteger(succ_x) ? succ_x : succ_x.toFixed(2);
+                lines.push(`succ_x(B,t) = ${succ_x_display}`);
+                lines.push('');
+
+                // SECTION 2: Lattice Parameters
+                lines.push('--- Lattice Parameters ---');
+
+                // First descent term
                 if (this.descentTerm) {
                     lines.push(`x₍fd₎ = ${this.descentTerm.x}`);
                 } else {
                     lines.push(`x₍fd₎ = none`);
                 }
+                lines.push('');
 
+                // Lambda values
                 lines.push(`λₓ = log₂(x) = ${step.lambda_x.toFixed(3)}`);
+                lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(3)}`);
+                lines.push('');
 
-                // Derived parameters (simplified)
-                lines.push(`ν = v₂(x) = ${step.nu}`);
-                lines.push(`α = v₂(x+1) = ${step.alpha}`);
-                lines.push(`m = (x+1)/2^α = ${step.m}`);
-                lines.push(`β = v₂(3^α·(x+1)/2^α - 1) = ${step.beta}`);
-                lines.push(`κ = α + β = ${step.alpha + step.beta}`);
-                lines.push(`ρ = (x+1)/2^α mod 2^(κ-α) = ${step.rho}`);
-                lines.push(`t = ⌊((x+1)/2^α - ρ)/2^(κ-α)⌋ = ${step.t}`);
+                // Unique derived parameters
                 lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
                 lines.push(`k = 2^e - 3^o·x = ${step.k}`);
-                lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(3)}`);
+                lines.push('');
 
                 // Theta-line intercepts and distances
                 const theta = 2 - Math.log2(3);
@@ -2636,35 +2677,6 @@
                 document.getElementById('oeSequence').textContent = sequence.getOEString();
                 document.getElementById('seqLength').textContent = sequence.steps.length - 1; // Exclude start
 
-                // Display OE blocks - each with congruence navigation
-                const blocks = sequence.findOEBlocks();
-                const allLines = [];
-
-                // Add maximal OE blocks
-                if (blocks.length > 0) {
-                    const blockLines = blocks.map((b, i) => {
-                        const startStep = sequence.steps[b.start];
-                        const k = sequence.getOEBlockK(b);
-                        const congruences = sequence.getCongruences(startStep.x, k);
-
-                        // Block pattern line
-                        const patternLine = `x=${startStep.x}: ${b.pattern}`;
-
-                        // Congruence navigation line
-                        const congLine = formatCongruenceHTML(congruences);
-
-                        return `${patternLine}<br>&nbsp;&nbsp;${congLine}`;
-                    });
-                    allLines.push(...blockLines);
-                    document.getElementById('oeBlocks').innerHTML = allLines.join('<br><br>');
-                } else {
-                    if (allLines.length > 0) {
-                        document.getElementById('oeBlocks').innerHTML = allLines.join('<br><br>');
-                    } else {
-                        document.getElementById('oeBlocks').textContent = 'None found';
-                    }
-                }
-
                 // Update x₀ info panel
                 this.updateX0Info(sequence);
 
@@ -2683,19 +2695,7 @@
 
                 const lines = [];
 
-                // Lattice position
-                lines.push(`o = ${step.o}`);
-                lines.push(`r = ${step.r}`);
-                lines.push(`e = ${step.e}`);
-
-                // Element - using simplified formula
-                if (step.x % 2 === 0) {
-                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>·(ρ + t·2<sup>κ-α</sup>) - 1) = ${step.x}`);
-                } else {
-                    lines.push(`x = 2<sup>α</sup>·(ρ + t·2<sup>κ-α</sup>) - 1 = ${step.x}`);
-                }
-
-                // First descent term (right after x)
+                // First descent term
                 const descentTerm = sequence.findFirstDescentTerm(step);
                 if (descentTerm) {
                     lines.push(`x<sub>fd</sub> = ${descentTerm.x}`);
@@ -2710,20 +2710,17 @@
                 } else {
                     lines.push(`x<sub>fd</sub> = none`);
                 }
+                lines.push(''); // Blank line
 
+                // Lambda values
                 lines.push(`λₓ = log₂(x) = ${step.lambda_x.toFixed(3)}`);
+                lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(3)}`);
+                lines.push(''); // Blank line
 
-                // Derived parameters (simplified)
-                lines.push(`ν = v₂(x) = ${step.nu}`);
-                lines.push(`α = v₂(x+1) = ${step.alpha}`);
-                lines.push(`m = (x+1)/2<sup>α</sup> = ${step.m}`);
-                lines.push(`β = v₂(3<sup>α</sup>·(x+1)/2<sup>α</sup> - 1) = ${step.beta}`);
-                lines.push(`κ = α + β = ${step.alpha + step.beta}`);
-                lines.push(`ρ = (x+1)/2<sup>α</sup> mod 2<sup>κ-α</sup> = ${step.rho}`);
-                lines.push(`t = ⌊((x+1)/2<sup>α</sup> - ρ)/2<sup>κ-α</sup>⌋ = ${step.t}`);
+                // Unique derived parameters
                 lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
                 lines.push(`k = 2^e - 3^o·x = ${step.k}`);
-                lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(3)}`);
+                lines.push(''); // Blank line
 
                 // Theta-line intercepts and distances
                 lines.push(`θ = 2 - log₂(3) = ${theta.toFixed(4)}`);
@@ -2798,7 +2795,7 @@
             updateAnchorSection() {
                 const section = document.getElementById('anchorSection');
 
-                if (this.anchor_k === null || !this.currentSequence) {
+                if (!this.currentSequence) {
                     section.style.display = 'none';
                     return;
                 }
@@ -2806,11 +2803,19 @@
                 section.style.display = 'block';
 
                 const x0 = this.currentSequence.steps[0].x;
-                const params = this.currentSequence.computeBlockParams(x0, this.anchor_k);
+
+                // If anchor_k is null, default to natural block (κ = α + β)
+                let effectiveAnchorK = this.anchor_k;
+                if (effectiveAnchorK === null) {
+                    const tempParams = this.currentSequence.computeBlockParams(x0, null);
+                    effectiveAnchorK = tempParams.alpha + tempParams.beta;
+                }
+
+                const params = this.currentSequence.computeBlockParams(x0, effectiveAnchorK);
 
                 // Create sequence for x0 to get actual o, r, e values at anchor_k
                 const blockSequence = new CollatzSequence(x0);
-                const prefix = blockSequence.getOEPrefixWithKEvens(this.anchor_k);
+                const prefix = blockSequence.getOEPrefixWithKEvens(effectiveAnchorK);
 
                 // Display pattern in its own section (like OE sequences elsewhere)
                 document.getElementById('anchorPattern').textContent = prefix;
@@ -2823,12 +2828,16 @@
 
                 const lines = [];
 
-                // Basic counts (for x0)
+                // GROUP A+B: Context & Lattice Position
+                lines.push(`x = ${x0}`);
                 lines.push(`o = ${o}`);
                 lines.push(`r = ${r}`);
                 lines.push(`e = ${e}`);
+                const n = 3 * o - r;
+                lines.push(`n = 3o - r = ${n}`);
+                lines.push(''); // Blank line
 
-                // Block parameters: B = (α, ν, ρ, κ), t
+                // GROUP C: Block Parameters B = (α, ν, ρ, κ), t
                 lines.push(`ν = v₂(x) = ${params.nu}`);
                 const x_odd = params.nu === 0 ? x0 : Math.floor(x0 / Math.pow(2, params.nu));
                 if (params.nu > 0) {
@@ -2836,31 +2845,79 @@
                 }
                 lines.push(`α = v₂(x/2<sup>ν</sup> + 1) = ${params.alpha}`);
 
-                // Compute m_raw internally but inline the formula in display
-                const m_raw = Math.floor((x_odd + 1) / Math.pow(2, params.alpha));
-
-                lines.push(`β = v₂(3<sup>α</sup>·(x/2<sup>ν</sup>+1)/2<sup>α</sup> - 1) = ${params.beta}`);
-                lines.push(`κ = ${this.anchor_k}`);
-                const isNaturalBlock = (this.anchor_k === params.alpha + params.beta);
-                lines.push(`natural = (κ = α + β) = ${isNaturalBlock}`);
+                // κ spinner (constrained to [α, α+β])
+                const minKappa = params.alpha;
+                const maxKappa = params.alpha + params.beta;
+                lines.push(`κ = <input type="number" id="anchorKappaSpinner" value="${effectiveAnchorK}" min="${minKappa}" max="${maxKappa}" step="1" style="width: 60px;">`);
 
                 lines.push(`ρ = (x/2<sup>ν</sup>+1)/2<sup>α</sup> mod 2<sup>κ-α</sup> = ${params.rho}`);
-                lines.push(`t = ⌊((x/2<sup>ν</sup>+1)/2<sup>α</sup> - ρ)/2<sup>κ-α</sup>⌋ = ${params.t}`);
 
-                // Show the affine function
+                // t spinner (t >= 0)
+                lines.push(`t = <input type="number" id="anchorTSpinner" value="${params.t}" min="0" step="1" style="width: 60px;">`);
+
+                lines.push(''); // Blank line
+
+                // GROUP D: Block Classification
+                // Compute m_raw internally but inline the formula in display
+                const m_raw = Math.floor((x_odd + 1) / Math.pow(2, params.alpha));
+                lines.push(`β = v₂(3<sup>α</sup>·(x/2<sup>ν</sup>+1)/2<sup>α</sup> - 1) = ${params.beta}`);
+                const isNaturalBlock = (effectiveAnchorK === params.alpha + params.beta);
+                lines.push(`natural = (κ = α + β) = ${isNaturalBlock}`);
+                lines.push(''); // Blank line
+
+                // GROUP E: Affine Functions
                 lines.push(`x(B,t) = 2<sup>ν</sup>·(2<sup>α</sup>·(ρ + t·2<sup>κ-α</sup>) - 1) = ${x0}`);
-
-                // Show succ_x function
                 const succ_x = (Math.pow(3, params.alpha) * params.rho - 1) / params.modulus + Math.pow(3, params.alpha) * params.t;
-                const succ_x_display = Number.isInteger(succ_x) ? succ_x : succ_x.toFixed(2);
+                let succ_x_display;
+                if (Number.isInteger(succ_x)) {
+                    succ_x_display = `<a href="#" class="succ-x-link" data-x="${succ_x}">${succ_x}</a>`;
+                } else {
+                    succ_x_display = succ_x.toFixed(2);
+                }
                 lines.push(`succ<sub>x</sub>(B,t) = (3<sup>α</sup>·ρ - 1)/2<sup>κ-α</sup> + 3<sup>α</sup>·t = ${succ_x_display}`);
 
-                // Add congruence navigation
-                const congruences = this.currentSequence.getCongruences(x0, this.anchor_k);
-                const navHTML = formatCongruenceHTML(congruences);
-                lines.push(navHTML);
-
                 document.getElementById('anchorContent').innerHTML = lines.join('<br>');
+
+                // Set up event handlers (wrap in setTimeout to ensure DOM is updated)
+                setTimeout(() => {
+                    const kappaSpinner = document.getElementById('anchorKappaSpinner');
+                    const tSpinner = document.getElementById('anchorTSpinner');
+                    const succXLink = document.querySelector('.succ-x-link');
+
+                    if (kappaSpinner) {
+                        kappaSpinner.addEventListener('change', () => {
+                            const newKappa = parseInt(kappaSpinner.value);
+                            if (!isNaN(newKappa) && newKappa >= minKappa && newKappa <= maxKappa) {
+                                this.anchor_k = newKappa;
+                                this.updateURL(x0, this.anchor_k);
+                                this.updateAnchorSection();
+                            }
+                        });
+                    }
+
+                    if (tSpinner) {
+                        tSpinner.addEventListener('change', () => {
+                            const newT = parseInt(tSpinner.value);
+                            if (!isNaN(newT) && newT >= 0) {
+                                // Calculate new x from the affine function: x = 2^ν·(2^α·(ρ + t·2^(κ-α)) - 1)
+                                const newX = Math.pow(2, params.nu) * (Math.pow(2, params.alpha) * (params.rho + newT * Math.pow(2, effectiveAnchorK - params.alpha)) - 1);
+                                this.loadSequenceForX(newX, effectiveAnchorK);
+                            }
+                        });
+                    }
+
+                    // Set up event handler for succ_x link
+                    if (succXLink) {
+                        succXLink.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            const newX = parseInt(succXLink.dataset.x);
+                            if (!isNaN(newX)) {
+                                // Navigate to succ_x without anchor_k (use natural block)
+                                this.loadSequenceForX(newX, null);
+                            }
+                        });
+                    }
+                }, 0);
             }
 
             loadSequenceForX(x, anchor_k = null) {

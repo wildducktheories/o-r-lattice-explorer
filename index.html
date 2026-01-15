@@ -354,24 +354,29 @@
                 for (let i = tempSteps.length - 1; i >= 0; i--) {
                     const currentX = tempSteps[i].x;
 
-                    // Compute α = v_2(x+1) - power of 2 dividing (x+1) - determines upward growth
+                    // Compute α = v₂(x+1)
                     tempSteps[i].alpha = this.v2(currentX + 1);
 
-                    // Compute γ = v_3(x+1) - power of 3 dividing (x+1) - neutral to growth/decay
-                    tempSteps[i].gamma = this.v3(currentX + 1);
+                    // Compute m = (x+1) / 2^α
+                    tempSteps[i].m = (currentX + 1) / Math.pow(2, tempSteps[i].alpha);
 
-                    // Compute m = (x+1) / (2^α * 3^γ)
-                    tempSteps[i].m = (currentX + 1) / (Math.pow(2, tempSteps[i].alpha) * Math.pow(3, tempSteps[i].gamma));
+                    // Compute β = v₂(3^α · m - 1)
+                    const threePowAlpha = Math.pow(3, tempSteps[i].alpha);
+                    tempSteps[i].beta = this.v2(threePowAlpha * tempSteps[i].m - 1);
+
+                    // Compute γ = v₃(m mod 2^(β+1))
+                    const twoPowBetaPlusOne = Math.pow(2, tempSteps[i].beta + 1);
+                    const mMod = tempSteps[i].m % twoPowBetaPlusOne;
+                    tempSteps[i].gamma = this.v3(mMod);
 
                     // Compute lambda_x = log_2(x)
                     tempSteps[i].lambda_x = Math.log2(currentX);
 
                     if (i === tempSteps.length - 1) {
-                        // At x=1: o=0, e=0, β=0
+                        // At x=1: o=0, e=0
                         tempSteps[i].o = 0;
                         tempSteps[i].e = 0;
                         tempSteps[i].r = 0;
-                        tempSteps[i].beta = 0;
                         tempSteps[i].n = i;
                     } else {
                         // Get successor (next step in forward direction)
@@ -382,12 +387,9 @@
                         if (currentX % 2 === 1) {
                             tempSteps[i].o = successor.o + 1;
                             tempSteps[i].e = successor.e;
-                            tempSteps[i].beta = successor.beta;
                         } else {
                             tempSteps[i].o = successor.o;
                             tempSteps[i].e = successor.e + 1;
-                            // β = v_2(x) for even x - determines downward decay
-                            tempSteps[i].beta = this.v2(currentX);
                         }
 
                         tempSteps[i].r = 2 * tempSteps[i].o - tempSteps[i].e;
@@ -403,27 +405,30 @@
                     // Compute lambda_k = log_2(k)
                     tempSteps[i].lambda_k = Math.log2(Math.abs(tempSteps[i].k));
 
-                    // For even x, compute nu = v_2(x) and work with odd part
-                    // For odd x, nu = 0
+                    // For even x, compute ν = v₂(x) and work with odd part
+                    // For odd x, ν = 0
                     if (currentX % 2 === 0) {
                         tempSteps[i].nu = this.v2(currentX);
                         const xOdd = currentX / Math.pow(2, tempSteps[i].nu);
                         // Compute parameters based on odd part
                         const alphaOdd = this.v2(xOdd + 1);
-                        const gammaOdd = this.v3(xOdd + 1);
-                        const mOdd = (xOdd + 1) / (Math.pow(2, alphaOdd) * Math.pow(3, gammaOdd));
-                        const betaOdd = tempSteps[i + 1] ? tempSteps[i + 1].beta : 0;
-                        const twoPowBeta = Math.pow(2, betaOdd);
-                        tempSteps[i].rho = mOdd % twoPowBeta;
-                        const oddPart = Math.floor(mOdd / twoPowBeta);  // This is (2t+1)
-                        tempSteps[i].t = (oddPart - 1) / 2;
+                        const mOdd = (xOdd + 1) / Math.pow(2, alphaOdd);
+                        const threePowAlphaOdd = Math.pow(3, alphaOdd);
+                        const betaOdd = this.v2(threePowAlphaOdd * mOdd - 1);
+                        const twoPowBetaOddPlusOne = Math.pow(2, betaOdd + 1);
+                        const mOddMod = mOdd % twoPowBetaOddPlusOne;
+                        const gammaOdd = this.v3(mOddMod);
+                        // ρ = (m mod 2^(β+1)) / 3^γ
+                        tempSteps[i].rho = mOddMod / Math.pow(3, gammaOdd);
+                        // t = floor(m / 2^(β+1))
+                        tempSteps[i].t = Math.floor(mOdd / twoPowBetaOddPlusOne);
                     } else {
                         tempSteps[i].nu = 0;
-                        // Compute rho and t from m = rho + 2^beta * (2t+1)
-                        const twoPowBeta = Math.pow(2, tempSteps[i].beta);
-                        tempSteps[i].rho = tempSteps[i].m % twoPowBeta;
-                        const oddPart = Math.floor(tempSteps[i].m / twoPowBeta);  // This is (2t+1)
-                        tempSteps[i].t = (oddPart - 1) / 2;
+                        // Compute ρ and t from m = 3^γ·ρ + t·2^(β+1)
+                        // ρ = (m mod 2^(β+1)) / 3^γ
+                        tempSteps[i].rho = mMod / Math.pow(3, tempSteps[i].gamma);
+                        // t = floor(m / 2^(β+1))
+                        tempSteps[i].t = Math.floor(tempSteps[i].m / twoPowBetaPlusOne);
                     }
                 }
 
@@ -2160,9 +2165,9 @@
 
                 // Element - include 2^ν factor for even values
                 if (step.x % 2 === 0) {
-                    lines.push(`x = 2^ν·(2^α·3^γ·(ρ + 2^β(2t+1)) - 1) = ${step.x}`);
+                    lines.push(`x = 2^ν·(2^α·(3^γ·ρ + t·2^(β+1)) - 1) = ${step.x}`);
                 } else {
-                    lines.push(`x = 2^α·3^γ·(ρ + 2^β(2t+1)) - 1 = ${step.x}`);
+                    lines.push(`x = 2^α·(3^γ·ρ + t·2^(β+1)) - 1 = ${step.x}`);
                 }
 
                 // First descent term (right after x)
@@ -2177,10 +2182,11 @@
                 // Derived parameters (in derivation order)
                 lines.push(`ν = v₂(x) = ${step.nu}`);
                 lines.push(`α = v₂(x+1) = ${step.alpha}`);
-                lines.push(`γ = v₃(x+1) = ${step.gamma}`);
-                lines.push(`β = v₂(${step.x % 2 === 0 ? 'x' : '3x+1'}) = ${step.beta}`);
-                lines.push(`ρ = ${step.rho}`);
-                lines.push(`t = ${step.t}`);
+                lines.push(`m = (x+1)/2^α = ${step.m}`);
+                lines.push(`β = v₂(3^α·m - 1) = ${step.beta}`);
+                lines.push(`γ = v₃(m mod 2^(β+1)) = ${step.gamma}`);
+                lines.push(`ρ = (m mod 2^(β+1))/3^γ = ${step.rho}`);
+                lines.push(`t = ⌊m/2^(β+1)⌋ = ${step.t}`);
                 lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
                 lines.push(`k = 2^e - 3^o·x = ${step.k}`);
                 lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(3)}`);
@@ -2642,9 +2648,9 @@
 
                 // Element - include 2^ν factor for even values
                 if (step.x % 2 === 0) {
-                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>·3<sup>γ</sup>·(ρ + 2<sup>β</sup>(2t+1)) - 1) = ${step.x}`);
+                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>·(3<sup>γ</sup>·ρ + t·2<sup>(β+1)</sup>) - 1) = ${step.x}`);
                 } else {
-                    lines.push(`x = 2<sup>α</sup>·3<sup>γ</sup>·(ρ + 2<sup>β</sup>(2t+1)) - 1 = ${step.x}`);
+                    lines.push(`x = 2<sup>α</sup>·(3<sup>γ</sup>·ρ + t·2<sup>(β+1)</sup>) - 1 = ${step.x}`);
                 }
 
                 // First descent term (right after x)
@@ -2668,10 +2674,11 @@
                 // Derived parameters (in derivation order)
                 lines.push(`ν = v₂(x) = ${step.nu}`);
                 lines.push(`α = v₂(x+1) = ${step.alpha}`);
-                lines.push(`γ = v₃(x+1) = ${step.gamma}`);
-                lines.push(`β = v₂(${step.x % 2 === 0 ? 'x' : '3x+1'}) = ${step.beta}`);
-                lines.push(`ρ = ${step.rho}`);
-                lines.push(`t = ${step.t}`);
+                lines.push(`m = (x+1)/2^α = ${step.m}`);
+                lines.push(`β = v₂(3^α·m - 1) = ${step.beta}`);
+                lines.push(`γ = v₃(m mod 2^(β+1)) = ${step.gamma}`);
+                lines.push(`ρ = (m mod 2^(β+1))/3^γ = ${step.rho}`);
+                lines.push(`t = ⌊m/2^(β+1)⌋ = ${step.t}`);
                 lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
                 lines.push(`k = 2^e - 3^o·x = ${step.k}`);
                 lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(3)}`);

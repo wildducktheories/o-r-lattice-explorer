@@ -4,25 +4,33 @@ Interactive web-based visualization tool for exploring Collatz sequences on the 
 
 ## Recent Updates
 
-### Block Parameterization Revision (January 2026)
+### Simplified Block Parameterization (January 2026)
 
-The block parameter system has been revised to use a more stable parameterization:
+The block parameter system has been simplified to focus exclusively on lattice-wide affine relationships:
 
-**Changes:**
-- **Reduced parameters**: From 6 parameters (α, δ, ν, γ, ρ, κ) to 5 parameters (α, δ, ν, ρ, κ)
-- **New delta derivation**: δ is now computed as v₃(ρ_raw) where ρ_raw = m_raw mod 2^(κ-α)
-- **Stability improvement**: δ now remains constant across all block instances as t varies, preventing parameter discontinuities
-- **Simplified formulas**: Block formula is now x(B,t) = 2^ν·(2^α·3^δ·(ρ + t·2^(κ-α)) - 1)
+**Current Parameters:**
+- **4 block parameters**: (α, ν, ρ, κ) plus scaling parameter t
+- **Fundamental identity**: x + 1 = 2^ν · 2^α · (ρ + t·2^(κ-α))
+- **Affine functions**:
+  - x(B,t) = 2^ν·(2^α·(ρ + t·2^(κ-α)) - 1)
+  - succ_x(B,t) = (3^α·ρ - 1)/2^(κ-α) + 3^α·t
 
 **Why this matters:**
-The previous γ/δ split caused instability: as t varied (enumerating different x values), the total 3-adic valuation of (x+1) would change, creating discontinuities in parameter distribution. The new approach derives δ from the block's modular structure, ensuring it captures "structural" 3-powers that remain constant across all instances.
+Previous approaches (6 parameters, then 5) attempted to capture both internal block dynamics (3-adic structure) and lattice-wide relationships simultaneously, causing instability. The current 4-parameter approach eliminates 3-adic parameters entirely, focusing only on affine structure. This provides a clean, minimal representation without internal dynamics complications.
 
-**Display changes:**
-- Anchor section now shows complete block parameters: ν, α, δ, m, β, κ, ρ, t
-- Natural block detection: displays whether κ = α + β
-- Shows x, o, r, e values at the anchor point
+**Interactive Anchor Block Panel:**
+- **Parameter display**: x, o, r, e, n=3o-r, ν, α, κ, ρ, t, β
+- **Interactive spinners**:
+  - κ spinner constrained to [α, α+β]
+  - t spinner (t ≥ 0) with automatic x recalculation via affine function
+- **Clickable successor**: Integer succ_x values link to navigate sequences
+- **Natural block detection**: Shows whether κ = α + β
 
-See `CHANGES.md` for detailed technical documentation of the parameter formulas.
+**Lattice Parameters Panel:**
+- Unique analytical properties: x_fd, λₓ, λₖ, d, k, θ analysis
+- Separated from anchor block to eliminate duplicate information
+
+See `CHANGES.md` for detailed technical documentation and `papers/affine-block-structures.pdf` for mathematical details.
 
 ## Overview
 
@@ -45,8 +53,6 @@ The visualizer uses a flexible layer-based architecture where each layer can be 
 - **Grid Layer**: Background lattice grid
 - **Axes Layer**: O-axis (horizontal) and R-axis (vertical) with labels
 - **Path Layer**: Sequence trajectory with semi-transparent gold points
-- **OE Blocks Layer**: Highlights ((OE)+E+) block structures
-- **λₘ Layer**: Plots log₃(m) on right y-axis (red circles, size = γ + 3)
 - **λₓ Layer** (enabled by default): Plots -log₂(x) on left axis (green circles at (o, -log₂(x)), size = β + 3)
   - Shows vertical line from lattice point (o,r) to (o, -log₂(x))
   - Shows horizontal line from theta slope intersection to x point
@@ -70,105 +76,70 @@ These lines provide bidirectional estimation:
 
 ### Interactive Tooltips
 
-Hover over any lattice point to see detailed information:
+Hover over any lattice point to see detailed information organized into two sections:
 
-**Lattice Coordinates:**
-- o, r, e values
+**Anchor Block (interactive on hover):**
+- Lattice position: x, o, r, e, n=3o-r
+- Block parameters: ν, α, κ, ρ, t
+- Block classification: β, natural (κ = α + β)
+- Affine functions: x(B,t), succ_x(B,t) with slopes and intercepts
 
-**Element Properties:**
-- x value with factorization: x = 2^α·3^γ·m - 1
-- λₓ = log₂(x)
+**Lattice Parameters:**
+- First descent: x_fd with congruence navigation
+- Lambda values: λₓ = log₂(x), λₖ = log₂(k)
+- Derived parameters: d = 2^(2o-r) - 3^o, k = 2^e - 3^o·x
+- Theta-line analysis:
+  - θ = 2 - log₂(3)
+  - cₒ,ᵣ = θ·o - r: intercept of x-estimator
+  - cₓ = log₂(x): intercept of (o,r)-estimator
+  - L = cₒ,ᵣ/√(1+θ²): normal distance from origin
+  - ε = (cₒ,ᵣ - cₓ)/√(1+θ²): error between estimators
 
-**Derived Parameters:**
-- α = v₂(x+1): 2-adic valuation determining upward growth
-- γ = v₃(x+1): 3-adic valuation
-- m = (x+1)/(2^α·3^γ): reduced multiplier
-- λₘ = log₃(m)
-- β = v₂(x) or v₂(3x+1): determines downward decay
-- d = 2^(2o-r) - 3^o
-- k = 2^e - 3^o·x
-- λₖ = log₂(k)
+### Anchor Block Panel
 
-**Theta-Line Analysis:**
-- θ = 2 - log₂(3)
-- cₒ,ᵣ = θ·o - r: intercept of x-estimator (through lattice point)
-- cₓ = log₂(x): intercept of (o,r)-estimator
-- L = cₒ,ᵣ/√(1+θ²): normal distance from origin line
-- ε = (cₒ,ᵣ - cₓ)/√(1+θ²): error between estimators
+The anchor block panel provides interactive exploration of block parameter space:
+
+**Interactive Controls:**
+- **κ spinner**: Adjust block length within range [α, α+β]
+  - Changes the block's modular structure
+  - Updates all derived parameters in real-time
+- **t spinner**: Navigate along affine families (t ≥ 0)
+  - Automatically calculates new x using affine function: x(B,t) = 2^ν·(2^α·(ρ + t·2^(κ-α)) - 1)
+  - Loads the new sequence immediately
+- **succ_x links**: Click integer successor values to navigate to next block
+  - Jumps to the successor's natural block (κ = α + β)
+
+**Display Sections:**
+1. **Lattice Position**: x, o, r, e, n=3o-r
+2. **Block Parameters**: ν, α, κ, ρ, t
+3. **Block Classification**: β, natural (true/false)
+4. **Affine Functions**: x(B,t), succ_x(B,t) with slopes
+
+**URL Parameters:**
+- `?x=27` - Loads sequence with natural block (κ = α + β)
+- `?x=27&anchor_k=3` - Loads sequence with specific κ value
+- Browser history preserves both parameters for back/forward navigation
 
 ### Congruence Navigation
 
-The visualizer supports navigating along **congruence families** - sets of values that share identical Collatz sequence structure up to the first k even terms.
-
-#### What are Congruences?
-
-For a given value x and parameter k, the congruent values are:
-- **x - 2^k** (previous congruent value)
-- **x** (current value)
-- **x + 2^k** (next congruent value)
-
-These values have identical sequence patterns for the first k even steps, making them structurally related in the Collatz dynamics.
-
-#### Two Types of Congruences
-
-**1. OE Block Congruences**
-
-Displayed in the OE Blocks panel for each maximal ((OE)+E+) block:
-- **k** = number of E's (even terms) in the block pattern
-- Example: For pattern "OEOEE", k=3, so congruent values are x±8
-
-Format:
-```
-x=27: OEOEE
-  k=3: ← 19 | 27 | 35 →
-```
-
-**2. First Descent (x_fd) Congruences**
-
-Displayed in the X₀ info panel below the x_fd value:
+**First Descent Congruences** in the Lattice Parameters panel:
+- Displayed below x_fd value with navigation links
 - **k** = 2(o_x - o_fd) - (r_x - r_fd)
-- Represents the number of even steps in the path between x and its first descent term
-- First descent term: point with x < x_search, L < L_search, o < o_search (maximizing o)
+- Represents even steps in the path between x and its first descent term
+- Click links (← prev | current | next →) to explore congruent values
 
-#### Anchor Navigation
+**Why This Matters:**
+- Values in congruence families share structural properties
+- Affine translations (via t spinner) explore systematic variations
+- Block length adjustments (via κ spinner) reveal how parity patterns affect dynamics
 
-When you click a congruence link (e.g., k=3: ← 19), the URL includes `?x=19&anchor_k=3` and the new page displays:
+### Lattice Parameters Panel
 
-```
-anchor: OEOEE
-  k=3: ← 11 | 19 | 27 →
-
-x=19: OEOEEE
-  k=4: ← 3 | 19 | 35 →
-```
-
-The **anchor** section shows:
-- The OE prefix of the current sequence up to k E's
-- The congruence navigation path you followed to arrive here
-- Allows you to continue navigating along the same k-congruence thread
-
-The maximal OE blocks follow below with their own congruence values.
-
-#### How to Use
-
-1. **Navigate blocks**: Click any congruence link to jump to a structurally similar value
-2. **Follow threads**: The anchor_k parameter persists, letting you explore an entire congruence family
-3. **Browser history**: Back/forward buttons work correctly, preserving anchor_k context
-4. **Reset anchor**: Click "Plot Sequence" or an example button to start fresh exploration
-
-#### Why This Matters
-
-Congruence navigation reveals:
-- **Structural invariants**: Patterns that persist across value transformations
-- **Periodic behavior**: How sequences evolve as you navigate x → x±2^k
-- **Family relationships**: Values that share common Collatz sub-trajectories
-
-### Starting Value Info Panel
-
-Displays comprehensive properties for the sequence's starting value x₀:
-- All lattice coordinates, valuations, and derived parameters
-- Lambda values (λₓ, λₘ, λₖ)
-- Complete theta-line analysis (θ, cₒ,ᵣ, cₓ, L, ε)
+Displays unique analytical properties not shown in the anchor block panel:
+- **First descent term** (x_fd) with congruence navigation
+- **Lambda values**: λₓ = log₂(x), λₖ = log₂(k)
+- **Derived parameters**: d = 2^(2o-r) - 3^o, k = 2^e - 3^o·x
+- **Theta-line analysis**: θ, cₒ,ᵣ, cₓ, L, ε
 - Appears immediately below the O-R lattice plot
 
 ## Mathematical Background
@@ -182,12 +153,15 @@ For a value x in a Collatz sequence:
 
 This coordinate system transforms the chaotic-appearing Collatz sequence into structured trajectories on the (o,r) lattice.
 
-### Greek Letter Variables
+### Block Parameters
 
-To avoid notation conflicts, we use:
-- **α (alpha)** = v₂(x+1): Controls upward growth
-- **γ (gamma)** = v₃(x+1): Neutral to growth/decay
-- **β (beta)** = v₂(x) or v₂(3x+1): Controls downward decay
+The affine block structure uses:
+- **ν (nu)** = v₂(x): Trailing powers of 2
+- **α (alpha)** = v₂(x/2^ν + 1): 2-adic valuation of odd core plus one
+- **ρ (rho)**: Odd residue parameter, ρ = (x/2^ν+1)/2^α mod 2^(κ-α)
+- **κ (kappa)**: Block length (number of even steps in block)
+- **t**: Scaling parameter enumerating block instances
+- **β (beta)** = v₂(3^α·(x+1)/2^α - 1): Natural block indicator (κ_natural = α + β)
 
 ### Theta-Line Relationship
 

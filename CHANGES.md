@@ -2,10 +2,96 @@
 
 ## Summary
 
-Two significant features have been added since commit c093445:
+Three major revisions have been made since commit c093445:
 
 1. **Swipe-to-Select Anchor Region** - Interactive selection on the lattice canvas
-2. **New Canonical Representation of x** - Fundamental change to how sequence elements are parameterized
+2. **New Canonical Representation of x** - Fundamental change to how sequence elements are parameterized (5 parameters with γ)
+3. **Simplified 4-Parameter Framework** - Final simplification eliminating 3-adic parameters entirely
+
+---
+
+## 3. Simplified 4-Parameter Framework (January 2026)
+
+**This is a fundamental simplification that eliminates internal 3-adic structure tracking.**
+
+### Previous Approach (WITHDRAWN)
+
+The 5-parameter system (α, ν, γ, ρ, κ) attempted to capture both:
+- Lattice-wide affine relationships between blocks
+- Internal 3-adic dynamics within blocks (via γ = v₃(m mod 2^β))
+
+This dual purpose caused conceptual complexity and instability.
+
+### Current Approach: 4 Parameters + Scaling
+
+**Block definition**: B = (α, ν, ρ, κ), t ≥ 0
+
+**Fundamental identity**:
+```
+x + 1 = 2^ν · 2^α · (ρ + t·2^(κ-α))
+```
+
+**Parameter computation**:
+1. ν = v₂(x)
+2. α = v₂(x/2^ν + 1)
+3. m_raw = (x/2^ν + 1)/2^α
+4. β = v₂(3^α·m_raw - 1)
+5. κ = α + β (natural block) or κ ∈ [α, α+β] (basic block)
+6. ρ = m_raw mod 2^(κ-α) (must be odd)
+7. t = ⌊(m_raw - ρ)/2^(κ-α)⌋
+
+**Affine functions**:
+```
+x(B,t) = 2^ν·(2^α·(ρ + t·2^(κ-α)) - 1)
+         slope: m_x = 2^(ν+κ)
+         intercept: c_x = 2^ν·(2^α·ρ - 1)
+
+succ_x(B,t) = (3^α·ρ - 1)/2^(κ-α) + 3^α·t
+              slope: m_succ = 3^α
+              intercept: c_succ = (3^α·ρ - 1)/2^(κ-α)
+```
+
+### Why This Matters
+
+**Separation of concerns**:
+- The 4-parameter framework focuses exclusively on **lattice-wide affine relationships**
+- Internal 3-adic dynamics (if needed) should be treated in separate analysis
+- No conflation of block-to-block relationships with internal block evolution
+
+**Benefits**:
+- Clean minimal parameterization
+- Stable parameters across block instances
+- Direct computational efficiency
+- Clear mathematical interpretation
+
+### UI Changes
+
+**Interactive Anchor Block Panel**:
+- Removed: δ, γ, m parameters
+- Added: n = 3o - r parameter
+- Added: Interactive κ spinner (constrained to [α, α+β])
+- Added: Interactive t spinner (t ≥ 0) with affine function calculation
+- Added: Clickable succ_x links for integer values
+- Organization: 5 logical groups (position, parameters, classification, functions, navigation)
+
+**Lattice Parameters Panel** (renamed from "Starting Value"):
+- Removed: Duplicate parameters (o, r, e, x, ν, α, β, κ, ρ, t)
+- Kept: Unique values (x_fd, λₓ, λₖ, d, k, θ analysis)
+- Purpose: Analytical properties not in anchor block
+
+**Tooltip**:
+- Two-section structure: "Anchor Block" + "Lattice Parameters"
+- Static versions of both panels
+- Block pattern prefix at top (if applicable)
+
+**Removed**:
+- ((OE)+E+) Blocks section entirely
+
+### Documentation Updates
+
+- `papers/affine-block-structures.pdf`: Documents 4-parameter framework mathematically
+- `reddit.txt`: Plain text summary for sharing
+- Renamed: succ_B → succ_x throughout all files (represents "successor of x according to B")
 
 ---
 
@@ -122,9 +208,13 @@ This means:
 
 | Hash | Description |
 |------|-------------|
+| 972e681 | Refactor anchor block panel with interactive controls |
+| dc41248 | WIP: Add basic block parameter display to anchor section |
+| ebc554a | Document basic blocks vs natural blocks distinction |
+| 9f56103 | Update CHANGES.md with revised parameter formulas |
+| f621fa7 | Revise m, β, γ, ρ, t parameter formulas |
 | 41c1bcd | Add swipe-to-select for anchor region on lattice |
 | 713942f | Add ρ, t, ν parameters and remove M Values layer |
-| f621fa7 | Revise m, β, γ, ρ, t parameter formulas |
 
 ---
 

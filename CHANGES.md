@@ -28,7 +28,7 @@ This dual purpose caused conceptual complexity and instability.
 
 **Fundamental identity**:
 ```
-x + 1 = 2^ν · 2^α · (ρ + t·2^(κ-α))
+x = 2^ν · (2^α · (ρ + t·2^(κ-α)) - 1)
 ```
 
 **Parameter computation**:

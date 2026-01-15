@@ -13,7 +13,7 @@
 \maketitle
 
 \begin{abstract}
-We present a simplified framework for analyzing Collatz sequences through affine block structures. Each block is characterized by four parameters $(\alpha, \nu, \rho, \kappa)$ and a scaling parameter $t$ that enumerates instances of the block. The block parameters describe the odd core structure, with $\nu$ accounting for trailing powers of 2. The framework defines two affine functions for the odd core: $x_{\text{odd}}(B,t)$ mapping $t$ to odd integers, and $\mathrm{succ}_{x,\text{odd}}(B,t)$ giving the successor value. For even values, $x(B,t) = 2^\nu \cdot x_{\text{odd}}(B,t)$. This approach focuses exclusively on lattice-wide affine relationships without attempting to model internal block dynamics.
+We present a simplified framework for analyzing Collatz sequences through affine block structures. Each block is characterized by four parameters $(\alpha, \nu, \rho, \kappa)$ and a scaling parameter $t$ that enumerates instances of the block. The block parameters describe the odd core structure, with $\nu$ accounting for leading even steps before the block. The framework defines two affine functions for the odd core: $x_{\text{odd}}(B,t)$ mapping $t$ to odd integers, and $\mathrm{succ}_{x,\text{odd}}(B,t)$ giving the successor value. For even values, $x(B,t) = 2^\nu \cdot x_{\text{odd}}(B,t)$. This approach focuses exclusively on lattice-wide affine relationships without attempting to model internal block dynamics.
 \end{abstract}
 
 \section{Introduction}
@@ -22,10 +22,10 @@ Collatz sequences exhibit structure that can be analyzed through \emph{blocks}--
 
 The key insight is to represent blocks using the fundamental identity:
 \[
-x + 1 = 2^\nu \cdot 2^\alpha \cdot (\rho + t \cdot 2^{\kappa - \alpha})
+x = 2^\nu \Bigl( 2^\alpha \cdot (\rho + t \cdot 2^{\kappa - \alpha}) - 1 \Bigr)
 \]
 
-This identity leads to a clean 4-parameter representation that avoids the complications of tracking internal 3-adic structure. The parameters $(\alpha, \rho, \kappa)$ describe the odd core, while $\nu$ accounts for trailing powers of 2 that are consumed immediately.
+This identity leads to a clean 4-parameter representation that avoids the complications of tracking internal 3-adic structure. The parameters $(\alpha, \rho, \kappa)$ describe the odd core, while $\nu$ accounts for leading even steps (the E* prefix) before the block begins.
 
 \section{Block Parameters}
 
@@ -36,10 +36,10 @@ B = (\alpha, \nu, \rho, \kappa), \quad t \ge 0
 
 where:
 \begin{itemize}
-    \item $\nu \ge 0$ is the 2-adic valuation $v_2(x)$ (trailing powers of 2)
+    \item $\nu \ge 0$ is the 2-adic valuation $v_2(x)$ (leading even steps in E*(OE)+E+ pattern)
     \item $\alpha \ge 1$ is the 2-adic valuation $v_2(x/2^\nu + 1)$ of the odd core plus one
     \item $\rho \ge 1$ is an odd integer parameter
-    \item $\kappa \ge \alpha$ is the block length (number of even steps)
+    \item $\kappa \ge \alpha$ is the block length (number of even steps in the block)
     \item $t \ge 0$ is the scaling parameter enumerating block instances
 \end{itemize}
 
@@ -49,7 +49,7 @@ A \emph{natural block} is one where $\kappa = \alpha + \beta$, where $\beta = v_
 
 \section{Affine Functions}
 
-The block parameters $(\alpha, \rho, \kappa)$ describe the structure of the odd core. We first define the affine functions for odd values, then show how $\nu$ extends these to even values.
+The block parameters $(\alpha, \rho, \kappa)$ describe the structure of the odd core. We first define the affine functions for odd values ($\nu = 0$), then show how $\nu$ prefixes additional even steps for even starting values.
 
 \subsection{Odd Core Functions}
 
@@ -86,7 +86,7 @@ c_{\mathrm{succ},\text{odd}} &= \frac{3^\alpha \rho - 1}{2^{\kappa - \alpha}}
 
 \subsection{Extension to Even Values}
 
-For even $x$ with $\nu = v_2(x) > 0$, the $\nu$ even steps at the start are consumed by dividing by $2^\nu$ to reach the odd core. Thus:
+For even $x$ with $\nu = v_2(x) > 0$, there are $\nu$ leading even steps (E* prefix) before reaching the odd core. These initial divisions by 2 are represented by the $2^\nu$ factor:
 
 \[
 x(B,t) = 2^\nu \cdot x_{\text{odd}}(B,t) = 2^\nu \Bigl( 2^\alpha (\rho + t \cdot 2^{\kappa - \alpha}) - 1 \Bigr)
@@ -99,7 +99,7 @@ The successor function remains:
 \mathrm{succ}_x(B,t) = \mathrm{succ}_{x,\text{odd}}(B,t)
 \]
 
-since the $\nu$ even steps have already been consumed in reaching the odd core, and the successor starts after the block operations on that odd core.
+since the $\nu$ leading even steps have already been consumed in reaching the odd core, and the successor starts after the block operations on that odd core.
 
 \section{Computing Block Parameters}
 

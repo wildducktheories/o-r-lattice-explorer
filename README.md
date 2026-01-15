@@ -10,7 +10,7 @@ The block parameter system has been simplified to focus exclusively on lattice-w
 
 **Current Parameters:**
 - **4 block parameters**: (α, ν, ρ, κ) plus scaling parameter t
-- **Fundamental identity**: x + 1 = 2^ν · 2^α · (ρ + t·2^(κ-α))
+- **Fundamental identity**: x = 2^ν · (2^α · (ρ + t·2^(κ-α)) - 1)
 - **Affine functions**:
   - x(B,t) = 2^ν·(2^α·(ρ + t·2^(κ-α)) - 1)
   - succ_x(B,t) = (3^α·ρ - 1)/2^(κ-α) + 3^α·t
@@ -156,10 +156,10 @@ This coordinate system transforms the chaotic-appearing Collatz sequence into st
 ### Block Parameters
 
 The affine block structure uses:
-- **ν (nu)** = v₂(x): Trailing powers of 2
+- **ν (nu)** = v₂(x): Leading even steps in E*(OE)+E+ pattern
 - **α (alpha)** = v₂(x/2^ν + 1): 2-adic valuation of odd core plus one
 - **ρ (rho)**: Odd residue parameter, ρ = (x/2^ν+1)/2^α mod 2^(κ-α)
-- **κ (kappa)**: Block length (number of even steps in block)
+- **κ (kappa)**: Block length (number of even steps in the block)
 - **t**: Scaling parameter enumerating block instances
 - **β (beta)** = v₂(3^α·(x+1)/2^α - 1): Natural block indicator (κ_natural = α + β)
 

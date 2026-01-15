@@ -2,6 +2,28 @@
 
 Interactive web-based visualization tool for exploring Collatz sequences on the O-R lattice coordinate system.
 
+## Recent Updates
+
+### Block Parameterization Revision (January 2026)
+
+The block parameter system has been revised to use a more stable parameterization:
+
+**Changes:**
+- **Reduced parameters**: From 6 parameters (α, δ, ν, γ, ρ, κ) to 5 parameters (α, δ, ν, ρ, κ)
+- **New delta derivation**: δ is now computed as v₃(ρ_raw) where ρ_raw = m_raw mod 2^(κ-α)
+- **Stability improvement**: δ now remains constant across all block instances as t varies, preventing parameter discontinuities
+- **Simplified formulas**: Block formula is now x(B,t) = 2^ν·(2^α·3^δ·(ρ + t·2^(κ-α)) - 1)
+
+**Why this matters:**
+The previous γ/δ split caused instability: as t varied (enumerating different x values), the total 3-adic valuation of (x+1) would change, creating discontinuities in parameter distribution. The new approach derives δ from the block's modular structure, ensuring it captures "structural" 3-powers that remain constant across all instances.
+
+**Display changes:**
+- Anchor section now shows complete block parameters: ν, α, δ, m, β, κ, ρ, t
+- Natural block detection: displays whether κ = α + β
+- Shows x, o, r, e values at the anchor point
+
+See `CHANGES.md` for detailed technical documentation of the parameter formulas.
+
 ## Overview
 
 This single-page application visualizes Collatz sequences using a novel (o,r) coordinate system where:

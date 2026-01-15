@@ -13,7 +13,7 @@
 \maketitle
 
 \begin{abstract}
-We present a simplified framework for analyzing Collatz sequences through affine block structures. Each block is characterized by four parameters $(\alpha, \nu, \rho, \kappa)$ and a scaling parameter $t$ that enumerates instances of the block. The block defines two affine functions: $x(B,t)$ mapping $t$ to integers within the block, and $\mathrm{succ}_x(B,t)$ giving the starting value of the successor block. This approach focuses exclusively on lattice-wide affine relationships without attempting to model internal block dynamics.
+We present a simplified framework for analyzing Collatz sequences through affine block structures. Each block is characterized by four parameters $(\alpha, \nu, \rho, \kappa)$ and a scaling parameter $t$ that enumerates instances of the block. The block parameters describe the odd core structure, with $\nu$ accounting for trailing powers of 2. The framework defines two affine functions for the odd core: $x_{\text{odd}}(B,t)$ mapping $t$ to odd integers, and $\mathrm{succ}_{x,\text{odd}}(B,t)$ giving the successor value. For even values, $x(B,t) = 2^\nu \cdot x_{\text{odd}}(B,t)$. This approach focuses exclusively on lattice-wide affine relationships without attempting to model internal block dynamics.
 \end{abstract}
 
 \section{Introduction}
@@ -25,7 +25,7 @@ The key insight is to represent blocks using the fundamental identity:
 x + 1 = 2^\nu \cdot 2^\alpha \cdot (\rho + t \cdot 2^{\kappa - \alpha})
 \]
 
-This identity leads to a clean 4-parameter representation that avoids the complications of tracking internal 3-adic structure.
+This identity leads to a clean 4-parameter representation that avoids the complications of tracking internal 3-adic structure. The parameters $(\alpha, \rho, \kappa)$ describe the odd core, while $\nu$ accounts for trailing powers of 2 that are consumed immediately.
 
 \section{Block Parameters}
 
@@ -49,38 +49,57 @@ A \emph{natural block} is one where $\kappa = \alpha + \beta$, where $\beta = v_
 
 \section{Affine Functions}
 
-Each block defines two affine functions of $t$:
+The block parameters $(\alpha, \rho, \kappa)$ describe the structure of the odd core. We first define the affine functions for odd values, then show how $\nu$ extends these to even values.
 
-\subsection{The x-Function}
+\subsection{Odd Core Functions}
 
-The function $x(B,t)$ maps the scaling parameter to integers:
+For odd $x$ (where $\nu = 0$), the block defines two affine functions of $t$:
+
+\subsubsection{The x-Function (Odd Core)}
+
 \[
-x(B,t) = 2^\nu \Bigl( 2^\alpha (\rho + t \cdot 2^{\kappa - \alpha}) - 1 \Bigr)
+x_{\text{odd}}(B,t) = 2^\alpha (\rho + t \cdot 2^{\kappa - \alpha}) - 1
 \]
 
-This is an affine function $x(t) = m_x \cdot t + c_x$ with:
+This is an affine function with:
 \begin{align*}
-m_x &= 2^{\nu + \kappa} \\
-c_x &= 2^\nu (2^\alpha \rho - 1)
+m_{x,\text{odd}} &= 2^\kappa \\
+c_{x,\text{odd}} &= 2^\alpha \rho - 1
 \end{align*}
 
-\subsection{The Successor Function}
+\subsubsection{The Successor Function (Odd Core)}
 
-The function $\mathrm{succ}_x(B,t)$ gives the starting value of the successor block:
 \[
-\mathrm{succ}_x(B,t) = \frac{3^\alpha \cdot (\rho + t \cdot 2^{\kappa - \alpha}) - 1}{2^{\kappa - \alpha}}
+\mathrm{succ}_{x,\text{odd}}(B,t) = \frac{3^\alpha \cdot (\rho + t \cdot 2^{\kappa - \alpha}) - 1}{2^{\kappa - \alpha}}
 \]
 
 Expanding:
 \[
-\mathrm{succ}_x(B,t) = \frac{3^\alpha \rho - 1}{2^{\kappa - \alpha}} + 3^\alpha \cdot t
+\mathrm{succ}_{x,\text{odd}}(B,t) = \frac{3^\alpha \rho - 1}{2^{\kappa - \alpha}} + 3^\alpha \cdot t
 \]
 
-This is an affine function $\mathrm{succ}_x(t) = m_{\mathrm{succ}} \cdot t + c_{\mathrm{succ}}$ with:
+This is an affine function with:
 \begin{align*}
-m_{\mathrm{succ}} &= 3^\alpha \\
-c_{\mathrm{succ}} &= \frac{3^\alpha \rho - 1}{2^{\kappa - \alpha}}
+m_{\mathrm{succ},\text{odd}} &= 3^\alpha \\
+c_{\mathrm{succ},\text{odd}} &= \frac{3^\alpha \rho - 1}{2^{\kappa - \alpha}}
 \end{align*}
+
+\subsection{Extension to Even Values}
+
+For even $x$ with $\nu = v_2(x) > 0$, the $\nu$ even steps at the start are consumed by dividing by $2^\nu$ to reach the odd core. Thus:
+
+\[
+x(B,t) = 2^\nu \cdot x_{\text{odd}}(B,t) = 2^\nu \Bigl( 2^\alpha (\rho + t \cdot 2^{\kappa - \alpha}) - 1 \Bigr)
+\]
+
+with slope $m_x = 2^{\nu + \kappa}$ and intercept $c_x = 2^\nu (2^\alpha \rho - 1)$.
+
+The successor function remains:
+\[
+\mathrm{succ}_x(B,t) = \mathrm{succ}_{x,\text{odd}}(B,t)
+\]
+
+since the $\nu$ even steps have already been consumed in reaching the odd core, and the successor starts after the block operations on that odd core.
 
 \section{Computing Block Parameters}
 
@@ -126,13 +145,13 @@ For $x = 35$:
 
 The block parameters are: $B = (\alpha=2, \nu=0, \rho=9, \kappa=6)$, $t=0$
 
-The affine functions are:
+Since $x = 35$ is odd ($\nu = 0$), we use the odd core affine functions:
 \begin{align*}
-x(t) &= 2^0(2^2(9 + t \cdot 2^4) - 1) = 4(9 + 16t) - 1 = 64t + 35 \\
-\mathrm{succ}_x(t) &= \frac{3^2 \cdot 9 - 1}{2^4} + 3^2 \cdot t = \frac{80}{16} + 9t = 5 + 9t
+x_{\text{odd}}(t) &= 2^2(9 + t \cdot 2^4) - 1 = 4(9 + 16t) - 1 = 64t + 35 \\
+\mathrm{succ}_{x,\text{odd}}(t) &= \frac{3^2 \cdot 9 - 1}{2^4} + 3^2 \cdot t = \frac{80}{16} + 9t = 5 + 9t
 \end{align*}
 
-For $t = 0$: $x(0) = 35$ and $\mathrm{succ}_x(0) = 5$.
+For $t = 0$: $x_{\text{odd}}(0) = 35$ and $\mathrm{succ}_{x,\text{odd}}(0) = 5$.
 
 Indeed, starting from $x = 35$, the Collatz map gives: $35 \to 106 \to 53 \to 160 \to 80 \to 40 \to 20 \to 10 \to 5$, confirming that the successor block starts at $5$.
 

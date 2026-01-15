@@ -51,12 +51,12 @@ Where m was an opaque intermediate value with λₘ = log₃(m).
 
 For **odd x**:
 ```
-x = 2^α · (3^γ·ρ + t·2^(β+1)) - 1
+x = 2^α · (3^γ·ρ + t·2^β) - 1
 ```
 
 For **even x**:
 ```
-x = 2^ν · (2^α · (3^γ·ρ + t·2^(β+1)) - 1)
+x = 2^ν · (2^α · (3^γ·ρ + t·2^β) - 1)
 ```
 
 ### Parameter Definitions (in computation order)
@@ -66,20 +66,20 @@ x = 2^ν · (2^α · (3^γ·ρ + t·2^(β+1)) - 1)
 | **α** | v₂(x+1) | Power of 2 dividing (x+1) |
 | **m** | (x+1) / 2^α | Intermediate value after extracting 2-power |
 | **β** | v₂(3^α · m - 1) | Computed from α and m |
-| **γ** | v₃(m mod 2^(β+1)) | 3-adic valuation of remainder |
+| **γ** | v₃(m mod 2^β) | 3-adic valuation of remainder |
 | **ν** | v₂(x) | Power of 2 dividing x (0 for odd x) |
-| **ρ** | (m mod 2^(β+1)) / 3^γ | Remainder with 3-power factored out |
-| **t** | ⌊m / 2^(β+1)⌋ | Quotient in the decomposition |
+| **ρ** | (m mod 2^β) / 3^γ | Remainder with 3-power factored out |
+| **t** | ⌊m / 2^β⌋ | Quotient in the decomposition |
 
 ### Identity
 
 ```
-m = 3^γ·ρ + t·2^(β+1)
+m = 3^γ·ρ + t·2^β
 ```
 
 ### Why This Matters
 
-The decomposition `m = 3^γ·ρ + t·2^(β+1)` makes explicit the structure that was hidden in m:
+The decomposition `m = 3^γ·ρ + t·2^β` makes explicit the structure that was hidden in m:
 
 - **ρ** captures the "offset" within a congruence class (after factoring out 3^γ)
 - **t** indexes translations within the equivalence class
@@ -92,11 +92,11 @@ For even x, parameters are computed from the odd part x/2^ν, ensuring consisten
 
 A **basic block** is a parity sequence with exactly κ evens. It is characterized by:
 - Parameters: (α, γ, ρ, t, κ) where κ is a free parameter
-- Modulus: 2^(κ-α+1)
+- Modulus: 2^(κ-α)
 
 A **natural block** is the specific block containing x where:
 - κ = α + β
-- Modulus: 2^(β+1) (since β = κ - α)
+- Modulus: 2^β (since β = κ - α)
 
 The natural block is the block that x naturally belongs to based on its own parameters. Basic blocks generalize this by allowing κ to vary independently.
 

@@ -176,10 +176,13 @@
         }
 
         .anchor-content {
-            display: flex;
-            gap: 20px;
             font-family: 'Courier New', monospace;
             color: #e0e0e0;
+            padding: 8px;
+            background: #1a1a1a;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-break: break-all;
         }
 
         .anchor-nav {
@@ -250,12 +253,9 @@
         </div>
 
         <div id="anchorSection" class="anchor-section" style="display: none;">
-            <div class="anchor-label">Anchor</div>
-            <div class="anchor-content">
-                <span id="anchorK">k = -</span>
-                <span id="anchorOEPrefix">-</span>
-            </div>
-            <div class="anchor-nav" id="anchorNav"></div>
+            <div class="anchor-label">Anchor Block</div>
+            <div id="anchorPattern" class="info-value" style="margin-bottom: 10px;">-</div>
+            <div class="anchor-content" id="anchorContent"></div>
         </div>
 
         <div id="infoPanel" class="info-panel" style="display: none;">
@@ -364,9 +364,9 @@
                     const threePowAlpha = Math.pow(3, tempSteps[i].alpha);
                     tempSteps[i].beta = this.v2(threePowAlpha * tempSteps[i].m - 1);
 
-                    // Compute γ = v₃(m mod 2^(β+1))
-                    const twoPowBetaPlusOne = Math.pow(2, tempSteps[i].beta + 1);
-                    const mMod = tempSteps[i].m % twoPowBetaPlusOne;
+                    // Compute γ = v₃(m mod 2^β)
+                    const twoPowBeta = Math.pow(2, tempSteps[i].beta);
+                    const mMod = tempSteps[i].m % twoPowBeta;
                     tempSteps[i].gamma = this.v3(mMod);
 
                     // Compute lambda_x = log_2(x)
@@ -415,20 +415,20 @@
                         const mOdd = (xOdd + 1) / Math.pow(2, alphaOdd);
                         const threePowAlphaOdd = Math.pow(3, alphaOdd);
                         const betaOdd = this.v2(threePowAlphaOdd * mOdd - 1);
-                        const twoPowBetaOddPlusOne = Math.pow(2, betaOdd + 1);
-                        const mOddMod = mOdd % twoPowBetaOddPlusOne;
+                        const twoPowBetaOdd = Math.pow(2, betaOdd);
+                        const mOddMod = mOdd % twoPowBetaOdd;
                         const gammaOdd = this.v3(mOddMod);
-                        // ρ = (m mod 2^(β+1)) / 3^γ
+                        // ρ = (m mod 2^β) / 3^γ
                         tempSteps[i].rho = mOddMod / Math.pow(3, gammaOdd);
-                        // t = floor(m / 2^(β+1))
-                        tempSteps[i].t = Math.floor(mOdd / twoPowBetaOddPlusOne);
+                        // t = floor(m / 2^β)
+                        tempSteps[i].t = Math.floor(mOdd / twoPowBetaOdd);
                     } else {
                         tempSteps[i].nu = 0;
-                        // Compute ρ and t from m = 3^γ·ρ + t·2^(β+1)
-                        // ρ = (m mod 2^(β+1)) / 3^γ
+                        // Compute ρ and t from m = 3^γ·ρ + t·2^β
+                        // ρ = (m mod 2^β) / 3^γ
                         tempSteps[i].rho = mMod / Math.pow(3, tempSteps[i].gamma);
-                        // t = floor(m / 2^(β+1))
-                        tempSteps[i].t = Math.floor(tempSteps[i].m / twoPowBetaPlusOne);
+                        // t = floor(m / 2^β)
+                        tempSteps[i].t = Math.floor(tempSteps[i].m / twoPowBeta);
                     }
                 }
 
@@ -540,6 +540,55 @@
                     n = n / 3;
                 }
                 return count;
+            }
+
+            // Compute block parameters for x with optional anchor_k
+            // Returns { alpha, delta, nu, rho, kappa, beta, m, t, x }
+            computeBlockParams(x, anchor_k = null) {
+                // Step 1: Find odd core
+                const nu = this.v2(x);
+                const x_odd = Math.floor(x / Math.pow(2, nu));
+
+                // Step 2: Compute alpha and m_raw from x_odd + 1
+                const alpha = this.v2(x_odd + 1);
+                const m_raw = Math.floor((x_odd + 1) / Math.pow(2, alpha));
+
+                // Step 3: Compute beta (natural block)
+                const delta_initial = this.v3(x_odd + 1);
+                const beta = this.v2(Math.pow(3, alpha + delta_initial) * Math.floor(m_raw / Math.pow(3, delta_initial)) - 1);
+                let kappa = beta + alpha;
+
+                // Step 4: Override kappa if anchor_k provided
+                if (anchor_k !== null) {
+                    if (anchor_k < alpha || anchor_k > alpha + beta) {
+                        throw new Error(`anchor_k = ${anchor_k} is out of range [${alpha}, ${alpha + beta}]`);
+                    }
+                    kappa = anchor_k;
+                }
+
+                // Step 5: Extract delta from ρ term (stable 3-powers)
+                const modulus_kappa = Math.pow(2, kappa - alpha);
+                const rho_raw = m_raw % modulus_kappa;
+                const delta = this.v3(rho_raw);
+
+                // Step 6: Factor out 3^δ from m and ρ
+                const m = Math.floor(m_raw / Math.pow(3, delta));
+                const rho = Math.floor(rho_raw / Math.pow(3, delta));
+
+                // Step 7: Compute t using kappa-alpha
+                const t = Math.floor((m - rho) / modulus_kappa);
+
+                // Assertion: t must be non-negative
+                if (t < 0) {
+                    throw new Error(`Invalid t value: t = ${t} for x = ${x} (nu=${nu}, alpha=${alpha}, delta=${delta}, rho=${rho}, m=${m}, kappa=${kappa}, beta=${beta})`);
+                }
+
+                // Step 8: Reconstruct x from parameters (should equal input x)
+                const m_reconstructed = rho + t * modulus_kappa;
+                const x_odd_reconstructed = Math.pow(2, alpha) * Math.pow(3, delta) * m_reconstructed - 1;
+                const xComputed = Math.pow(2, nu) * x_odd_reconstructed;
+
+                return { alpha, delta, nu, rho, kappa, beta, modulus: modulus_kappa, m, t, x: xComputed };
             }
 
             getOEString() {
@@ -2165,9 +2214,9 @@
 
                 // Element - include 2^ν factor for even values
                 if (step.x % 2 === 0) {
-                    lines.push(`x = 2^ν·(2^α·(3^γ·ρ + t·2^(β+1)) - 1) = ${step.x}`);
+                    lines.push(`x = 2^ν·(2^α·3^δ·m - 1) = ${step.x}`);
                 } else {
-                    lines.push(`x = 2^α·(3^γ·ρ + t·2^(β+1)) - 1 = ${step.x}`);
+                    lines.push(`x = 2^α·3^δ·m - 1 = ${step.x}`);
                 }
 
                 // First descent term (right after x)
@@ -2184,9 +2233,10 @@
                 lines.push(`α = v₂(x+1) = ${step.alpha}`);
                 lines.push(`m = (x+1)/2^α = ${step.m}`);
                 lines.push(`β = v₂(3^α·m - 1) = ${step.beta}`);
-                lines.push(`γ = v₃(m mod 2^(β+1)) = ${step.gamma}`);
-                lines.push(`ρ = (m mod 2^(β+1))/3^γ = ${step.rho}`);
-                lines.push(`t = ⌊m/2^(β+1)⌋ = ${step.t}`);
+                lines.push(`κ = α + β = ${step.alpha + step.beta}`);
+                lines.push(`γ = v₃(m mod 2^β) = ${step.gamma}`);
+                lines.push(`ρ = (m mod 2^β)/3^γ = ${step.rho}`);
+                lines.push(`t = ⌊m/2^β⌋ = ${step.t}`);
                 lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
                 lines.push(`k = 2^e - 3^o·x = ${step.k}`);
                 lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(3)}`);
@@ -2648,9 +2698,9 @@
 
                 // Element - include 2^ν factor for even values
                 if (step.x % 2 === 0) {
-                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>·(3<sup>γ</sup>·ρ + t·2<sup>(β+1)</sup>) - 1) = ${step.x}`);
+                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>·3<sup>δ</sup>·m - 1) = ${step.x}`);
                 } else {
-                    lines.push(`x = 2<sup>α</sup>·(3<sup>γ</sup>·ρ + t·2<sup>(β+1)</sup>) - 1 = ${step.x}`);
+                    lines.push(`x = 2<sup>α</sup>·3<sup>δ</sup>·m - 1 = ${step.x}`);
                 }
 
                 // First descent term (right after x)
@@ -2676,9 +2726,10 @@
                 lines.push(`α = v₂(x+1) = ${step.alpha}`);
                 lines.push(`m = (x+1)/2^α = ${step.m}`);
                 lines.push(`β = v₂(3^α·m - 1) = ${step.beta}`);
-                lines.push(`γ = v₃(m mod 2^(β+1)) = ${step.gamma}`);
-                lines.push(`ρ = (m mod 2^(β+1))/3^γ = ${step.rho}`);
-                lines.push(`t = ⌊m/2^(β+1)⌋ = ${step.t}`);
+                lines.push(`κ = α + β = ${step.alpha + step.beta}`);
+                lines.push(`γ = v₃(m mod 2^β) = ${step.gamma}`);
+                lines.push(`ρ = (m mod 2^β)/3^γ = ${step.rho}`);
+                lines.push(`t = ⌊m/2^β⌋ = ${step.t}`);
                 lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
                 lines.push(`k = 2^e - 3^o·x = ${step.k}`);
                 lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(3)}`);
@@ -2762,16 +2813,53 @@
                 }
 
                 section.style.display = 'block';
-                document.getElementById('anchorK').textContent = `k = ${this.anchor_k}`;
 
-                const prefix = this.currentSequence.getOEPrefixWithKEvens(this.anchor_k);
-                document.getElementById('anchorOEPrefix').textContent = prefix;
+                const x0 = this.currentSequence.steps[0].x;
+                const params = this.currentSequence.computeBlockParams(x0, this.anchor_k);
+
+                // Create sequence for x0 to get actual o, r, e values at anchor_k
+                const blockSequence = new CollatzSequence(x0);
+                const prefix = blockSequence.getOEPrefixWithKEvens(this.anchor_k);
+
+                // Display pattern in its own section (like OE sequences elsewhere)
+                document.getElementById('anchorPattern').textContent = prefix;
+
+                // Find the step where e equals anchor_k to get the actual o, r, e values
+                const blockStep = blockSequence.steps.find(s => s.e === this.anchor_k);
+                const o = blockStep ? blockStep.o : 0;
+                const r = blockStep ? blockStep.r : 0;
+                const e = blockStep ? blockStep.e : 0;
+
+                const lines = [];
+
+                // Basic counts (at anchor point with anchor_k evens)
+                lines.push(`o = ${o}`);
+                lines.push(`r = ${r}`);
+                lines.push(`e = ${e}`);
+
+                // Block parameters for x₀
+                lines.push(`ν = v₂(x) = ${params.nu}`);
+                const x_odd = params.nu === 0 ? x0 : Math.floor(x0 / Math.pow(2, params.nu));
+                if (params.nu > 0) {
+                    lines.push(`x / 2<sup>ν</sup> = ${x_odd}`);
+                }
+                lines.push(`α = v₂(x/2<sup>ν</sup> + 1) = ${params.alpha}`);
+                lines.push(`β = v₂(3<sup>α+v₃(x/2<sup>ν</sup>+1)</sup>·m - 1) = ${params.beta}`);
+                lines.push(`κ = ${this.anchor_k}`);
+                const isNaturalBlock = (this.anchor_k === params.alpha + params.beta);
+                lines.push(`natural = (κ = α + β) = ${isNaturalBlock}`);
+                lines.push(`δ = v₃([(x/2<sup>ν</sup>+1)/2<sup>α</sup>] mod 2<sup>κ-α</sup>) = ${params.delta}`);
+                lines.push(`m = (x/2<sup>ν</sup>+1)/(2<sup>α</sup>·3<sup>δ</sup>) = ${params.m}`);
+                lines.push(`ρ = (m mod 2<sup>κ-α</sup>) = ${params.rho}`);
+                lines.push(`t = ⌊(m - ρ)/2<sup>κ-α</sup>⌋ = ${params.t}`);
+                lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>·3<sup>δ</sup>·(ρ + t·2<sup>κ-α</sup>) - 1) = ${x0}`);
 
                 // Add congruence navigation
-                const x0 = this.currentSequence.steps[0].x;
                 const congruences = this.currentSequence.getCongruences(x0, this.anchor_k);
                 const navHTML = formatCongruenceHTML(congruences);
-                document.getElementById('anchorNav').innerHTML = navHTML;
+                lines.push(navHTML);
+
+                document.getElementById('anchorContent').innerHTML = lines.join('<br>');
             }
 
             loadSequenceForX(x, anchor_k = null) {

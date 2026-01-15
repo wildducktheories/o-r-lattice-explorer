@@ -1,0 +1,44 @@
+version: '3'
+
+tasks:
+  pdf:
+    desc: Generate PDF from LaTeX papers
+    deps:
+      - pdf:current
+      - pdf:withdrawn
+
+  pdf:current:
+    desc: Generate PDF for current paper
+    dir: papers
+    sources:
+      - affine-block-structures.tex
+    generates:
+      - affine-block-structures.pdf
+    cmds:
+      - pdflatex -interaction=nonstopmode affine-block-structures.tex
+      - pdflatex -interaction=nonstopmode affine-block-structures.tex
+    silent: false
+
+  pdf:withdrawn:
+    desc: Generate PDF for withdrawn paper
+    dir: papers
+    sources:
+      - affine-block-structures-withdrawn-2026-01.tex
+    generates:
+      - affine-block-structures-withdrawn-2026-01.pdf
+    cmds:
+      - pdflatex -interaction=nonstopmode affine-block-structures-withdrawn-2026-01.tex
+      - pdflatex -interaction=nonstopmode affine-block-structures-withdrawn-2026-01.tex
+    silent: false
+
+  clean:
+    desc: Clean LaTeX auxiliary files
+    dir: papers
+    cmds:
+      - rm -f *.aux *.log *.out *.toc *.synctex.gz
+
+  clean:all:
+    desc: Clean all generated files including PDFs
+    dir: papers
+    cmds:
+      - rm -f *.aux *.log *.out *.toc *.synctex.gz *.pdf

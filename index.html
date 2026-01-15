@@ -364,11 +364,6 @@
                     const threePowAlpha = Math.pow(3, tempSteps[i].alpha);
                     tempSteps[i].beta = this.v2(threePowAlpha * tempSteps[i].m - 1);
 
-                    // Compute γ = v₃(m mod 2^β)
-                    const twoPowBeta = Math.pow(2, tempSteps[i].beta);
-                    const mMod = tempSteps[i].m % twoPowBeta;
-                    tempSteps[i].gamma = this.v3(mMod);
-
                     // Compute lambda_x = log_2(x)
                     tempSteps[i].lambda_x = Math.log2(currentX);
 
@@ -407,28 +402,28 @@
 
                     // For even x, compute ν = v₂(x) and work with odd part
                     // For odd x, ν = 0
+                    // Simplified: x+1 = 2^ν · 2^α · (ρ + t·2^(κ-α))
                     if (currentX % 2 === 0) {
                         tempSteps[i].nu = this.v2(currentX);
                         const xOdd = currentX / Math.pow(2, tempSteps[i].nu);
                         // Compute parameters based on odd part
                         const alphaOdd = this.v2(xOdd + 1);
                         const mOdd = (xOdd + 1) / Math.pow(2, alphaOdd);
-                        const threePowAlphaOdd = Math.pow(3, alphaOdd);
-                        const betaOdd = this.v2(threePowAlphaOdd * mOdd - 1);
-                        const twoPowBetaOdd = Math.pow(2, betaOdd);
-                        const mOddMod = mOdd % twoPowBetaOdd;
-                        const gammaOdd = this.v3(mOddMod);
-                        // ρ = (m mod 2^β) / 3^γ
-                        tempSteps[i].rho = mOddMod / Math.pow(3, gammaOdd);
-                        // t = floor(m / 2^β)
-                        tempSteps[i].t = Math.floor(mOdd / twoPowBetaOdd);
+                        const betaOdd = this.v2(Math.pow(3, alphaOdd) * mOdd - 1);
+                        const kappaOdd = alphaOdd + betaOdd;
+                        const modulusOdd = Math.pow(2, kappaOdd - alphaOdd);
+                        // ρ = m mod 2^(κ-α)
+                        tempSteps[i].rho = mOdd % modulusOdd;
+                        // t = ⌊(m - ρ)/2^(κ-α)⌋
+                        tempSteps[i].t = Math.floor((mOdd - tempSteps[i].rho) / modulusOdd);
                     } else {
                         tempSteps[i].nu = 0;
-                        // Compute ρ and t from m = 3^γ·ρ + t·2^β
-                        // ρ = (m mod 2^β) / 3^γ
-                        tempSteps[i].rho = mMod / Math.pow(3, tempSteps[i].gamma);
-                        // t = floor(m / 2^β)
-                        tempSteps[i].t = Math.floor(tempSteps[i].m / twoPowBeta);
+                        const kappa = tempSteps[i].alpha + tempSteps[i].beta;
+                        const modulus = Math.pow(2, kappa - tempSteps[i].alpha);
+                        // ρ = m mod 2^(κ-α)
+                        tempSteps[i].rho = tempSteps[i].m % modulus;
+                        // t = ⌊(m - ρ)/2^(κ-α)⌋
+                        tempSteps[i].t = Math.floor((tempSteps[i].m - tempSteps[i].rho) / modulus);
                     }
                 }
 
@@ -543,19 +538,19 @@
             }
 
             // Compute block parameters for x with optional anchor_k
-            // Returns { alpha, delta, nu, rho, kappa, beta, m, t, x }
+            // Returns { alpha, nu, rho, kappa, beta, t, x }
             computeBlockParams(x, anchor_k = null) {
                 // Step 1: Find odd core
                 const nu = this.v2(x);
                 const x_odd = Math.floor(x / Math.pow(2, nu));
 
                 // Step 2: Compute alpha and m_raw from x_odd + 1
+                // Identity: x+1 = 2^ν · 2^α · (ρ + t·2^(κ-α))
                 const alpha = this.v2(x_odd + 1);
                 const m_raw = Math.floor((x_odd + 1) / Math.pow(2, alpha));
 
                 // Step 3: Compute beta (natural block)
-                const delta_initial = this.v3(x_odd + 1);
-                const beta = this.v2(Math.pow(3, alpha + delta_initial) * Math.floor(m_raw / Math.pow(3, delta_initial)) - 1);
+                const beta = this.v2(Math.pow(3, alpha) * m_raw - 1);
                 let kappa = beta + alpha;
 
                 // Step 4: Override kappa if anchor_k provided
@@ -566,29 +561,27 @@
                     kappa = anchor_k;
                 }
 
-                // Step 5: Extract delta from ρ term (stable 3-powers)
-                const modulus_kappa = Math.pow(2, kappa - alpha);
-                const rho_raw = m_raw % modulus_kappa;
-                const delta = this.v3(rho_raw);
+                // Step 5: Compute ρ and t
+                const modulus = Math.pow(2, kappa - alpha);
+                const rho = m_raw % modulus;
 
-                // Step 6: Factor out 3^δ from m and ρ
-                const m = Math.floor(m_raw / Math.pow(3, delta));
-                const rho = Math.floor(rho_raw / Math.pow(3, delta));
+                // ρ must be odd
+                if (rho % 2 === 0) {
+                    throw new Error(`Invalid ρ value: ρ = ${rho} is even (should be odd)`);
+                }
 
-                // Step 7: Compute t using kappa-alpha
-                const t = Math.floor((m - rho) / modulus_kappa);
+                const t = Math.floor((m_raw - rho) / modulus);
 
                 // Assertion: t must be non-negative
                 if (t < 0) {
-                    throw new Error(`Invalid t value: t = ${t} for x = ${x} (nu=${nu}, alpha=${alpha}, delta=${delta}, rho=${rho}, m=${m}, kappa=${kappa}, beta=${beta})`);
+                    throw new Error(`Invalid t value: t = ${t} for x = ${x} (nu=${nu}, alpha=${alpha}, rho=${rho}, kappa=${kappa}, beta=${beta})`);
                 }
 
-                // Step 8: Reconstruct x from parameters (should equal input x)
-                const m_reconstructed = rho + t * modulus_kappa;
-                const x_odd_reconstructed = Math.pow(2, alpha) * Math.pow(3, delta) * m_reconstructed - 1;
-                const xComputed = Math.pow(2, nu) * x_odd_reconstructed;
+                // Step 6: Reconstruct x from parameters (should equal input x)
+                // x = 2^ν · (2^α · (ρ + t·2^(κ-α)) - 1)
+                const xComputed = Math.pow(2, nu) * (Math.pow(2, alpha) * (rho + t * modulus) - 1);
 
-                return { alpha, delta, nu, rho, kappa, beta, modulus: modulus_kappa, m, t, x: xComputed };
+                return { alpha, nu, rho, kappa, beta, modulus, t, x: xComputed };
             }
 
             getOEString() {
@@ -2228,15 +2221,14 @@
 
                 lines.push(`λₓ = log₂(x) = ${step.lambda_x.toFixed(3)}`);
 
-                // Derived parameters (in derivation order)
+                // Derived parameters (simplified)
                 lines.push(`ν = v₂(x) = ${step.nu}`);
                 lines.push(`α = v₂(x+1) = ${step.alpha}`);
                 lines.push(`m = (x+1)/2^α = ${step.m}`);
                 lines.push(`β = v₂(3^α·m - 1) = ${step.beta}`);
                 lines.push(`κ = α + β = ${step.alpha + step.beta}`);
-                lines.push(`γ = v₃(m mod 2^β) = ${step.gamma}`);
-                lines.push(`ρ = (m mod 2^β)/3^γ = ${step.rho}`);
-                lines.push(`t = ⌊m/2^β⌋ = ${step.t}`);
+                lines.push(`ρ = m mod 2^(κ-α) = ${step.rho}`);
+                lines.push(`t = ⌊(m - ρ)/2^(κ-α)⌋ = ${step.t}`);
                 lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
                 lines.push(`k = 2^e - 3^o·x = ${step.k}`);
                 lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(3)}`);
@@ -2696,11 +2688,11 @@
                 lines.push(`r = ${step.r}`);
                 lines.push(`e = ${step.e}`);
 
-                // Element - include 2^ν factor for even values
+                // Element - using simplified formula
                 if (step.x % 2 === 0) {
-                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>·3<sup>δ</sup>·m - 1) = ${step.x}`);
+                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>·(ρ + t·2<sup>κ-α</sup>) - 1) = ${step.x}`);
                 } else {
-                    lines.push(`x = 2<sup>α</sup>·3<sup>δ</sup>·m - 1 = ${step.x}`);
+                    lines.push(`x = 2<sup>α</sup>·(ρ + t·2<sup>κ-α</sup>) - 1 = ${step.x}`);
                 }
 
                 // First descent term (right after x)
@@ -2721,15 +2713,14 @@
 
                 lines.push(`λₓ = log₂(x) = ${step.lambda_x.toFixed(3)}`);
 
-                // Derived parameters (in derivation order)
+                // Derived parameters (simplified)
                 lines.push(`ν = v₂(x) = ${step.nu}`);
                 lines.push(`α = v₂(x+1) = ${step.alpha}`);
                 lines.push(`m = (x+1)/2^α = ${step.m}`);
                 lines.push(`β = v₂(3^α·m - 1) = ${step.beta}`);
                 lines.push(`κ = α + β = ${step.alpha + step.beta}`);
-                lines.push(`γ = v₃(m mod 2^β) = ${step.gamma}`);
-                lines.push(`ρ = (m mod 2^β)/3^γ = ${step.rho}`);
-                lines.push(`t = ⌊m/2^β⌋ = ${step.t}`);
+                lines.push(`ρ = m mod 2^(κ-α) = ${step.rho}`);
+                lines.push(`t = ⌊(m - ρ)/2^(κ-α)⌋ = ${step.t}`);
                 lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
                 lines.push(`k = 2^e - 3^o·x = ${step.k}`);
                 lines.push(`λₖ = log₂(k) = ${step.lambda_k.toFixed(3)}`);
@@ -2837,22 +2828,32 @@
                 lines.push(`r = ${r}`);
                 lines.push(`e = ${e}`);
 
-                // Block parameters for x₀
+                // Block parameters: B = (α, ν, ρ, κ), t
                 lines.push(`ν = v₂(x) = ${params.nu}`);
                 const x_odd = params.nu === 0 ? x0 : Math.floor(x0 / Math.pow(2, params.nu));
                 if (params.nu > 0) {
                     lines.push(`x / 2<sup>ν</sup> = ${x_odd}`);
                 }
                 lines.push(`α = v₂(x/2<sup>ν</sup> + 1) = ${params.alpha}`);
-                lines.push(`β = v₂(3<sup>α+v₃(x/2<sup>ν</sup>+1)</sup>·m - 1) = ${params.beta}`);
+
+                // Show m_raw for reference
+                const m_raw = Math.floor((x_odd + 1) / Math.pow(2, params.alpha));
+                lines.push(`m<sub>raw</sub> = (x/2<sup>ν</sup>+1)/2<sup>α</sup> = ${m_raw}`);
+
+                lines.push(`β = v₂(3<sup>α</sup>·m<sub>raw</sub> - 1) = ${params.beta}`);
                 lines.push(`κ = ${this.anchor_k}`);
                 const isNaturalBlock = (this.anchor_k === params.alpha + params.beta);
                 lines.push(`natural = (κ = α + β) = ${isNaturalBlock}`);
-                lines.push(`δ = v₃([(x/2<sup>ν</sup>+1)/2<sup>α</sup>] mod 2<sup>κ-α</sup>) = ${params.delta}`);
-                lines.push(`m = (x/2<sup>ν</sup>+1)/(2<sup>α</sup>·3<sup>δ</sup>) = ${params.m}`);
-                lines.push(`ρ = (m mod 2<sup>κ-α</sup>) = ${params.rho}`);
-                lines.push(`t = ⌊(m - ρ)/2<sup>κ-α</sup>⌋ = ${params.t}`);
-                lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>·3<sup>δ</sup>·(ρ + t·2<sup>κ-α</sup>) - 1) = ${x0}`);
+
+                lines.push(`ρ = m<sub>raw</sub> mod 2<sup>κ-α</sup> = ${params.rho}`);
+                lines.push(`t = ⌊(m<sub>raw</sub> - ρ)/2<sup>κ-α</sup>⌋ = ${params.t}`);
+
+                // Show the affine function
+                lines.push(`x(B,t) = 2<sup>ν</sup>·(2<sup>α</sup>·(ρ + t·2<sup>κ-α</sup>) - 1) = ${x0}`);
+
+                // Show succ_B function
+                const succ_B = (Math.pow(3, params.alpha) * params.rho - 1) / params.modulus + Math.pow(3, params.alpha) * params.t;
+                lines.push(`succ<sub>B</sub>(B,t) = (3<sup>α</sup>·ρ - 1)/2<sup>κ-α</sup> + 3<sup>α</sup>·t = ${succ_B.toFixed(2)}`);
 
                 // Add congruence navigation
                 const congruences = this.currentSequence.getCongruences(x0, this.anchor_k);

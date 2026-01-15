@@ -1,0 +1,166 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\title{Affine Block Structure in Collatz Sequences}
+\author{Jon Seymour}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We present a simplified framework for analyzing Collatz sequences through affine block structures. Each block is characterized by four parameters $(\alpha, \nu, \rho, \kappa)$ and a scaling parameter $t$ that enumerates instances of the block. The block defines two affine functions: $x(B,t)$ mapping $t$ to integers within the block, and $\mathrm{succ}_B(B,t)$ giving the starting value of the successor block. This approach focuses exclusively on lattice-wide affine relationships without attempting to model internal block dynamics.
+\end{abstract}
+
+\section{Introduction}
+
+Collatz sequences exhibit structure that can be analyzed through \emph{blocks}---contiguous subsequences with predictable parity patterns. This work presents a minimal parameterization of such blocks that captures their essential affine properties.
+
+The key insight is to represent blocks using the fundamental identity:
+\[
+x + 1 = 2^\nu \cdot 2^\alpha \cdot (\rho + t \cdot 2^{\kappa - \alpha})
+\]
+
+This identity leads to a clean 4-parameter representation that avoids the complications of tracking internal 3-adic structure.
+
+\section{Block Parameters}
+
+A block $B$ is defined by four parameters and a scaling parameter:
+\[
+B = (\alpha, \nu, \rho, \kappa), \quad t \ge 0
+\]
+
+where:
+\begin{itemize}
+    \item $\nu \ge 0$ is the 2-adic valuation $v_2(x)$ (trailing powers of 2)
+    \item $\alpha \ge 1$ is the 2-adic valuation $v_2(x/2^\nu + 1)$ of the odd core plus one
+    \item $\rho \ge 1$ is an odd integer parameter
+    \item $\kappa \ge \alpha$ is the block length (number of even steps)
+    \item $t \ge 0$ is the scaling parameter enumerating block instances
+\end{itemize}
+
+\subsection{Natural Blocks}
+
+A \emph{natural block} is one where $\kappa = \alpha + \beta$, where $\beta = v_2(3^\alpha \rho - 1)$ is determined by the block's natural structure.
+
+\section{Affine Functions}
+
+Each block defines two affine functions of $t$:
+
+\subsection{The x-Function}
+
+The function $x(B,t)$ maps the scaling parameter to integers:
+\[
+x(B,t) = 2^\nu \Bigl( 2^\alpha (\rho + t \cdot 2^{\kappa - \alpha}) - 1 \Bigr)
+\]
+
+This is an affine function $x(t) = m_x \cdot t + c_x$ with:
+\begin{align*}
+m_x &= 2^{\nu + \kappa} \\
+c_x &= 2^\nu (2^\alpha \rho - 1)
+\end{align*}
+
+\subsection{The Successor Function}
+
+The function $\mathrm{succ}_B(B,t)$ gives the starting value of the successor block:
+\[
+\mathrm{succ}_B(B,t) = \frac{3^\alpha \cdot (\rho + t \cdot 2^{\kappa - \alpha}) - 1}{2^{\kappa - \alpha}}
+\]
+
+Expanding:
+\[
+\mathrm{succ}_B(B,t) = \frac{3^\alpha \rho - 1}{2^{\kappa - \alpha}} + 3^\alpha \cdot t
+\]
+
+This is an affine function $\mathrm{succ}_B(t) = m_{\mathrm{succ}} \cdot t + c_{\mathrm{succ}}$ with:
+\begin{align*}
+m_{\mathrm{succ}} &= 3^\alpha \\
+c_{\mathrm{succ}} &= \frac{3^\alpha \rho - 1}{2^{\kappa - \alpha}}
+\end{align*}
+
+\section{Computing Block Parameters}
+
+Given an integer $x$, we compute its block parameters as follows:
+
+\begin{enumerate}
+    \item Compute $\nu = v_2(x)$, the 2-adic valuation
+    \item Extract the odd core: $x_{\text{odd}} = x / 2^\nu$
+    \item Compute $\alpha = v_2(x_{\text{odd}} + 1)$
+    \item Compute $m_{\text{raw}} = (x_{\text{odd}} + 1) / 2^\alpha$
+    \item For natural blocks, compute $\beta = v_2(3^\alpha m_{\text{raw}} - 1)$ and set $\kappa = \alpha + \beta$
+    \item For basic blocks, choose $\kappa \in [\alpha, \alpha + \beta]$
+    \item Compute $\rho = m_{\text{raw}} \bmod 2^{\kappa - \alpha}$
+    \item Compute the scaling parameter:
+    \[
+    t = \left\lfloor \frac{m_{\text{raw}} - \rho}{2^{\kappa - \alpha}} \right\rfloor
+    \]
+\end{enumerate}
+
+Note: $\rho$ must be odd. If the computed value is even, there is an error in the calculation.
+
+\section{Verification}
+
+The computed parameters can be verified by checking:
+\[
+x = 2^\nu \Bigl( 2^\alpha (\rho + t \cdot 2^{\kappa - \alpha}) - 1 \Bigr)
+\]
+
+This should exactly equal the original $x$ value.
+
+\section{Example: x = 35}
+
+For $x = 35$:
+\begin{itemize}
+    \item $\nu = v_2(35) = 0$ (odd number)
+    \item $\alpha = v_2(36) = 2$
+    \item $m_{\text{raw}} = 36/4 = 9$
+    \item $\beta = v_2(3^2 \cdot 9 - 1) = v_2(80) = 4$
+    \item $\kappa = 2 + 4 = 6$ (natural block)
+    \item $\rho = 9 \bmod 16 = 9$
+    \item $t = \lfloor(9-9)/16\rfloor = 0$
+\end{itemize}
+
+The block parameters are: $B = (\alpha=2, \nu=0, \rho=9, \kappa=6)$, $t=0$
+
+The affine functions are:
+\begin{align*}
+x(t) &= 2^0(2^2(9 + t \cdot 2^4) - 1) = 4(9 + 16t) - 1 = 64t + 35 \\
+\mathrm{succ}_B(t) &= \frac{3^2 \cdot 9 - 1}{2^4} + 3^2 \cdot t = \frac{80}{16} + 9t = 5 + 9t
+\end{align*}
+
+For $t = 0$: $x(0) = 35$ and $\mathrm{succ}_B(0) = 5$.
+
+Indeed, starting from $x = 35$, the Collatz map gives: $35 \to 106 \to 53 \to 160 \to 80 \to 40 \to 20 \to 10 \to 5$, confirming that the successor block starts at $5$.
+
+\section{Significance}
+
+This framework provides several insights:
+
+\begin{itemize}
+    \item \textbf{Affine structure}: Blocks naturally organize into affine families, revealing geometric patterns in Collatz sequences
+    \item \textbf{Minimal parameterization}: Using only 4 parameters plus $t$, we capture the essential structure without internal dynamics
+    \item \textbf{Lattice-wide relationships}: The successor function connects blocks across the entire trajectory
+    \item \textbf{Computational efficiency}: Block parameters can be computed directly from $x$ without iterating the sequence
+\end{itemize}
+
+\section{Scope and Limitations}
+
+This framework intentionally focuses on \emph{lattice-wide affine relationships} between blocks as atomic units. It does not attempt to model:
+
+\begin{itemize}
+    \item Internal evolution of individual blocks through the Collatz map
+    \item 3-adic structure within blocks (powers of 3 in intermediate values)
+    \item Step-by-step parity patterns within blocks
+\end{itemize}
+
+These aspects of internal block dynamics, if needed, should be treated separately in an independent analysis.
+
+\section{Conclusion}
+
+The affine block framework provides a clean, minimal approach to understanding Collatz sequences through their block structure. By focusing exclusively on affine relationships and avoiding the complexities of internal dynamics, this approach reveals the geometric organization of Collatz sequences while maintaining mathematical rigor and computational tractability.
+
+\end{document}

@@ -1,0 +1,179 @@
+# Affine Block Structure in Collatz Sequences
+
+This work studies Collatz sequences using **affine block structures**, which organize integers into families sharing predictable parity patterns.
+
+## Block Parameters
+
+Each block is defined by: `B = (α, ν, ρ, κ)`
+
+- **α** ≥ 1 - 2-adic valuation v₂(x/2^ν + 1) of the odd core plus one
+- **ν** ≥ 0 - counts leading even steps in the E*(OE)+E+ sequence pattern (v₂(x))
+- **ρ** ≥ 1 - odd integer parameter defining the block structure
+- **κ** ≥ α - block length (number of even steps in the block)
+- **t** ≥ 0 - scaling parameter enumerating different x values sharing the same block structure
+
+## The Fundamental Identity
+
+The framework is built on this identity:
+
+```
+x = 2^ν · (2^α · (ρ + t·2^(κ-α)) - 1)
+```
+
+This identity captures the essential affine structure without requiring internal 3-adic dynamics.
+
+## Affine Functions
+
+The block parameters (α, ρ, κ) describe the odd core structure, with ν accounting for leading even steps before the block.
+
+### Odd Core Functions
+
+For odd x (where ν = 0), each block defines two affine functions of t:
+
+**The x-Function:**
+
+```
+x_odd(B,t) = 2^α · (ρ + t·2^(κ-α)) - 1
+
+Slope: m_x,odd = 2^κ
+Intercept: c_x,odd = 2^α·ρ - 1
+```
+
+**The Successor Function:**
+
+```
+succ_x,odd(B,t) = (3^α·ρ - 1)/2^(κ-α) + 3^α·t
+
+Slope: m_succ,odd = 3^α
+Intercept: c_succ,odd = (3^α·ρ - 1)/2^(κ-α)
+```
+
+### Extension to Even Values
+
+For even x with ν > 0:
+
+```
+x(B,t) = 2^ν · x_odd(B,t)
+       = 2^ν · (2^α · (ρ + t·2^(κ-α)) - 1)
+
+Slope: m_x = 2^(ν+κ)
+Intercept: c_x = 2^ν · (2^α·ρ - 1)
+```
+
+The successor function remains:
+
+```
+succ_x(B,t) = succ_x,odd(B,t)
+```
+
+since the ν even steps have already been consumed in reaching the odd core, and the successor starts after the block operations on that odd core.
+
+## Computing Block Parameters
+
+Given an integer x, compute its block parameters:
+
+1. Compute ν = v₂(x), the 2-adic valuation
+2. Extract the odd core: x_odd = x / 2^ν
+3. Compute α = v₂(x_odd + 1)
+4. Compute m_raw = (x_odd + 1) / 2^α
+5. For natural blocks, compute β = v₂(3^α·m_raw - 1) and set κ = α + β
+6. For basic blocks, choose κ ∈ [α, α + β]
+7. Compute ρ = m_raw mod 2^(κ-α)
+8. Compute the scaling parameter: t = ⌊(m_raw - ρ)/2^(κ-α)⌋
+
+**Note:** ρ must be odd. If the computed value is even, there is an error in the calculation.
+
+## Natural Blocks vs Basic Blocks
+
+- **Natural blocks**: κ = α + β, where β = v₂(3^α·m_raw - 1)
+- **Basic blocks**: κ ∈ [α, α + β] (generalized blocks with arbitrary length)
+
+Natural blocks represent the "default" block structure determined entirely by α and the initial value.
+
+## Example: x = 35
+
+For x = 35:
+```
+ν = v₂(35) = 0 (odd number)
+α = v₂(36) = 2
+m_raw = 36/4 = 9
+β = v₂(3²·9 - 1) = v₂(80) = 4
+κ = 2 + 4 = 6 (natural block)
+ρ = 9 mod 16 = 9
+t = ⌊(9-9)/16⌋ = 0
+```
+
+Block parameters: `B = (α=2, ν=0, ρ=9, κ=6)`, t=0
+
+Since x = 35 is odd (ν = 0), the affine functions are:
+```
+x_odd(t) = 2²·(9 + t·2⁴) - 1 = 4(9 + 16t) - 1 = 64t + 35
+succ_x,odd(t) = (3²·9 - 1)/2⁴ + 3²·t = 80/16 + 9t = 5 + 9t
+```
+
+For t = 0: x_odd(0) = 35 and succ_x,odd(0) = 5.
+
+Indeed, the Collatz sequence from x = 35 gives: 35 → 106 → 53 → 160 → 80 → 40 → 20 → 10 → 5, confirming that the successor block starts at 5.
+
+## Why This Matters
+
+- **Affine structure**: Blocks naturally organize into affine families, revealing geometric patterns in Collatz sequences
+- **Minimal parameterization**: Using only 4 parameters plus t, we capture the essential structure without internal dynamics
+- **Lattice-wide relationships**: The successor function connects blocks across the entire trajectory
+- **Computational efficiency**: Block parameters can be computed directly from x without iterating the sequence
+
+## Scope and Limitations
+
+This framework intentionally focuses on **lattice-wide affine relationships** between blocks as atomic units. It does not attempt to model:
+
+- Internal evolution of individual blocks through the Collatz map
+- 3-adic structure within blocks (powers of 3 in intermediate values)
+- Step-by-step parity patterns within blocks
+
+These aspects of internal block dynamics, if needed, should be treated separately in an independent analysis.
+
+---
+
+# History
+
+## January 2026 - Simplified to 4 Parameters
+
+### Previous Approaches (WITHDRAWN)
+
+Two previous parameterizations were attempted and subsequently withdrawn:
+
+**1. Six-parameter system (α, δ, ν, γ, ρ, κ):**
+- Attempted "canonical split" between γ and δ representing 3-adic valuations
+- **Problem:** As t varied, the total 3-adic valuation changed, creating discontinuities in the γ/δ split
+- **Result:** Instability and conceptual confusion
+
+**2. Five-parameter system (α, δ, ν, ρ, κ):**
+- Removed γ, computed δ directly as v₃(m_raw mod 2^(κ-α))
+- **Problem:** Still attempted to capture both internal block dynamics (via δ) and lattice-wide relationships simultaneously
+- **Result:** Conceptual muddling - conflated two distinct aspects that should be treated separately
+
+### The Core Problem
+
+Both withdrawn approaches tried to combine:
+1. **Internal dynamics of blocks** - How individual blocks evolve through the Collatz map
+2. **Lattice-wide dynamics** - How blocks as whole units relate to each other
+
+The γ and δ parameters (representing 3-adic valuations) were the signature of this conflation.
+
+### The Solution
+
+**Current 4-parameter approach (α, ν, ρ, κ):**
+- Focuses exclusively on **lattice-wide affine relationships**
+- Eliminates 3-adic parameters entirely
+- The fundamental identity x = 2^ν·(2^α·(ρ + t·2^(κ-α)) - 1) captures all necessary structure
+- Internal 3-adic analysis, if needed, should be treated separately
+
+This provides:
+- Clean minimal parameterization
+- Stable parameters across block instances
+- Clear mathematical interpretation
+- Separation of concerns
+
+---
+
+**See the paper:** papers/affine-block-structures.pdf for full mathematical details.

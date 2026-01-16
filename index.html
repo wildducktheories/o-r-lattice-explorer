@@ -219,6 +219,49 @@
             margin-bottom: 20px;
             border: 1px solid #ff6b6b;
         }
+
+        .popout-icon {
+            float: right;
+            cursor: pointer;
+            font-size: 18px;
+            color: #4a9eff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            user-select: none;
+        }
+
+        .popout-icon:hover {
+            background-color: rgba(74, 158, 255, 0.1);
+            color: #6bb3ff;
+        }
+
+        .section-header {
+            position: relative;
+            margin-bottom: 10px;
+        }
+
+        .canvas-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .controls-header {
+            background-color: #1a1a1a;
+            padding: 8px 15px;
+            margin: -10px -10px 15px -10px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .controls-title {
+            color: #4a9eff;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
     </style>
 </head>
 <body>
@@ -231,16 +274,27 @@
         <div id="errorPanel" class="error" style="display: none;"></div>
 
         <div class="canvas-container">
+            <div class="canvas-header">
+                <h2 style="color: #4a9eff; margin: 0;">O-R Lattice</h2>
+                <span class="popout-icon" id="popoutLatticeBtn" title="Pop out lattice">⧉</span>
+            </div>
             <canvas id="latticeCanvas" width="1200" height="800"></canvas>
         </div>
 
         <div id="anchorSection" class="anchor-section" style="display: none;">
-            <div class="anchor-label">Anchor Block</div>
+            <div class="anchor-label">
+                Anchor Block
+                <span class="popout-icon" id="popoutAnchorBtn" title="Pop out anchor block">⧉</span>
+            </div>
             <div id="anchorPattern" class="info-value" style="margin-bottom: 10px;">-</div>
             <div class="anchor-content" id="anchorContent"></div>
         </div>
 
         <div class="controls">
+            <div class="controls-header">
+                <span class="controls-title">Controls</span>
+                <span class="popout-icon" id="popoutControlsBtn" title="Pop out controls">⧉</span>
+            </div>
             <div class="control-row">
                 <label for="x0Input">Starting value (x₀):</label>
                 <input type="number" id="x0Input" value="27" min="1" step="1">
@@ -276,7 +330,10 @@
 
         <div id="infoPanel" class="info-panel" style="display: none;">
             <div class="info-section">
-                <div class="info-label">Lattice Parameters</div>
+                <div class="info-label">
+                    Lattice Parameters
+                    <span class="popout-icon" id="popoutParamsBtn" title="Pop out lattice parameters">⧉</span>
+                </div>
                 <div class="info-value" id="infoContent"></div>
             </div>
         </div>
@@ -2598,6 +2655,35 @@
                 // Set up congruence link navigation
                 this.setupCongruenceNavigation();
 
+                // Handle popout window close events
+                window.addEventListener('message', (event) => {
+                    if (event.data.type === 'popoutClosed') {
+                        if (event.data.name === 'lattice') {
+                            document.querySelector('.canvas-container').style.display = 'block';
+                            this.latticePopout = null;
+                        } else if (event.data.name === 'controls') {
+                            document.querySelector('.controls').style.display = 'block';
+                            this.controlsPopout = null;
+                        } else if (event.data.name === 'anchorBlock') {
+                            // Only show if there's content to display
+                            const anchorSection = document.getElementById('anchorSection');
+                            const anchorContent = document.getElementById('anchorContent');
+                            if (anchorContent && anchorContent.innerHTML.trim() !== '') {
+                                anchorSection.style.display = 'block';
+                            }
+                            this.anchorBlockPopout = null;
+                        } else if (event.data.name === 'latticeParameters') {
+                            // Only show if there's content to display
+                            const infoPanel = document.getElementById('infoPanel');
+                            const infoContent = document.getElementById('infoContent');
+                            if (infoContent && infoContent.innerHTML.trim() !== '') {
+                                infoPanel.style.display = 'block';
+                            }
+                            this.latticeParametersPopout = null;
+                        }
+                    }
+                });
+
                 this.loadFromURL();
             }
 
@@ -2732,6 +2818,14 @@
                 // Use innerHTML instead of textContent to render HTML tags like <sub>
                 document.getElementById('infoContent').innerHTML = lines.join('<br>');
                 document.getElementById('infoPanel').style.display = 'block';
+
+                // Update popout window if open
+                if (this.latticeParametersPopout && !this.latticeParametersPopout.closed) {
+                    this.latticeParametersPopout.postMessage({
+                        type: 'updateLatticeParameters',
+                        content: document.getElementById('infoPanel').innerHTML
+                    }, '*');
+                }
             }
 
             verifyInvariants(sequence) {
@@ -2777,6 +2871,7 @@
                     this.currentSequence = sequence;
                     this.renderer.clear();
                     this.renderer.addSequence(sequence);
+                    this.updateCanvasPopout();
                     this.heatmapRenderer.render(sequence);
                     this.updateInfo(sequence);
 
@@ -2918,6 +3013,14 @@
                         });
                     }
                 }, 0);
+
+                // Update popout window if open
+                if (this.anchorBlockPopout && !this.anchorBlockPopout.closed) {
+                    this.anchorBlockPopout.postMessage({
+                        type: 'updateAnchorBlock',
+                        content: document.getElementById('anchorSection').innerHTML
+                    }, '*');
+                }
             }
 
             loadSequenceForX(x, anchor_k = null) {
@@ -2951,6 +3054,7 @@
                 this.renderer.showEvenTerms = showEven;
                 this.renderer.fitToView();
                 this.renderer.render();
+                this.updateCanvasPopout();
             }
 
             toggleLayer(layerName) {
@@ -2958,12 +3062,20 @@
                 if (layer) {
                     layer.enabled = !layer.enabled;
                     this.renderer.render();
+                    this.updateCanvasPopout();
                     this.updateAnimateButton();
                 }
             }
 
             toggleAnimation() {
                 this.renderer.startAnimation();
+            }
+
+            updateCanvasPopout() {
+                // Update lattice popout window if open
+                if (this.latticePopout && !this.latticePopout.closed) {
+                    this.latticePopout.postMessage({ type: 'updateCanvas' }, '*');
+                }
             }
 
             updateAnimateButton() {
@@ -2982,10 +3094,290 @@
                     button.style.display = 'none';
                 }
             }
+
+            popoutLattice() {
+                // Check if already popped out
+                if (this.latticePopout && !this.latticePopout.closed) {
+                    this.latticePopout.focus();
+                    return;
+                }
+
+                const win = window.open('about:blank', 'Lattice', 'popup=yes,width=1250,height=900,left=100,top=100,resizable=yes,scrollbars=no');
+                if (!win) return;
+
+                // Hide the canvas container in main window
+                document.querySelector('.canvas-container').style.display = 'none';
+
+                win.document.write(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>O-R Lattice</title>
+                        <style>
+                            body { margin: 0; padding: 10px; background: #0f0f0f; }
+                            canvas { display: block; background: #1a1a1a; border-radius: 4px; }
+                        </style>
+                    </head>
+                    <body>
+                        <canvas id="popoutCanvas" width="1200" height="800"></canvas>
+                        <script>
+                            // Copy canvas content from parent
+                            const parentCanvas = window.opener.document.getElementById('latticeCanvas');
+                            const canvas = document.getElementById('popoutCanvas');
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(parentCanvas, 0, 0);
+
+                            // Listen for updates from parent
+                            window.addEventListener('message', (event) => {
+                                if (event.data.type === 'updateCanvas') {
+                                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                                    ctx.drawImage(parentCanvas, 0, 0);
+                                }
+                            });
+
+                            // Update on close
+                            window.addEventListener('beforeunload', () => {
+                                window.opener.postMessage({ type: 'popoutClosed', name: 'lattice' }, '*');
+                            });
+                        <\/script>
+                    </body>
+                    </html>
+                `);
+                win.document.close();
+
+                // Store reference for updates
+                this.latticePopout = win;
+            }
+
+            popoutControls() {
+                // Check if already popped out
+                if (this.controlsPopout && !this.controlsPopout.closed) {
+                    this.controlsPopout.focus();
+                    return;
+                }
+
+                const controlsDiv = document.querySelector('.controls');
+                const win = window.open('about:blank', 'Controls', 'popup=yes,width=800,height=600,left=200,top=200,resizable=yes,scrollbars=yes');
+                if (!win) return;
+
+                // Hide the controls in main window
+                controlsDiv.style.display = 'none';
+
+                win.document.write(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Controls</title>
+                        <style>
+                            body { margin: 0; padding: 20px; background: #0f0f0f; color: #e0e0e0; font-family: Arial, sans-serif; }
+                            ${Array.from(document.styleSheets[0].cssRules).map(rule => rule.cssText).join('\n')}
+                        </style>
+                    </head>
+                    <body>
+                        <div class="controls" style="margin: 0;">
+                            ${controlsDiv.innerHTML}
+                        </div>
+                        <script>
+                            // Proxy all button clicks back to parent
+                            document.querySelectorAll('button').forEach(button => {
+                                const onclick = button.getAttribute('onclick');
+                                if (onclick) {
+                                    button.onclick = () => window.opener.eval(onclick);
+                                }
+                            });
+
+                            // Proxy input changes
+                            document.querySelectorAll('input').forEach(input => {
+                                if (!window.opener) return;
+                                const parentInput = window.opener.document.getElementById(input.id);
+                                if (parentInput) {
+                                    input.value = parentInput.value;
+                                    input.checked = parentInput.checked;
+
+                                    input.addEventListener('change', () => {
+                                        parentInput.value = input.value;
+                                        parentInput.checked = input.checked;
+                                        const onchange = parentInput.getAttribute('onchange');
+                                        if (onchange) window.opener.eval(onchange);
+                                    });
+
+                                    // Listen for updates from parent
+                                    setInterval(() => {
+                                        input.value = parentInput.value;
+                                        input.checked = parentInput.checked;
+                                    }, 100);
+                                }
+                            });
+
+                            window.addEventListener('beforeunload', () => {
+                                window.opener.postMessage({ type: 'popoutClosed', name: 'controls' }, '*');
+                            });
+                        <\/script>
+                    </body>
+                    </html>
+                `);
+                win.document.close();
+
+                // Store reference
+                this.controlsPopout = win;
+            }
+
+            popoutAnchorBlock() {
+                // Check if already popped out
+                if (this.anchorBlockPopout && !this.anchorBlockPopout.closed) {
+                    this.anchorBlockPopout.focus();
+                    return;
+                }
+
+                const anchorSection = document.getElementById('anchorSection');
+                const anchorContent = document.getElementById('anchorContent');
+                if (!anchorContent || anchorContent.innerHTML.trim() === '') {
+                    alert('No anchor block to display. Plot a sequence first.');
+                    return;
+                }
+
+                const win = window.open('about:blank', 'AnchorBlock', 'popup=yes,width=600,height=800,left=300,top=150,resizable=yes,scrollbars=yes');
+                if (!win) return;
+
+                // Hide the anchor section in main window
+                anchorSection.style.display = 'none';
+
+                win.document.write(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Anchor Block</title>
+                        <style>
+                            body { margin: 0; padding: 20px; background: #0f0f0f; color: #e0e0e0; font-family: Arial, sans-serif; }
+                            ${Array.from(document.styleSheets[0].cssRules).map(rule => rule.cssText).join('\n')}
+                        </style>
+                    </head>
+                    <body>
+                        <div class="anchor-section" style="display: block;">
+                            ${anchorSection.innerHTML}
+                        </div>
+                        <script>
+                            // Listen for updates from parent
+                            window.addEventListener('message', (event) => {
+                                if (event.data.type === 'updateAnchorBlock') {
+                                    document.querySelector('.anchor-section').innerHTML = event.data.content;
+
+                                    // Re-attach event handlers for spinners and links
+                                    const kappaSpinner = document.getElementById('anchorKappaSpinner');
+                                    const tSpinner = document.getElementById('anchorTSpinner');
+                                    const succXLink = document.querySelector('.succ-x-link');
+
+                                    if (kappaSpinner) {
+                                        kappaSpinner.addEventListener('change', () => {
+                                            window.opener.document.getElementById('anchorKappaSpinner').value = kappaSpinner.value;
+                                            window.opener.document.getElementById('anchorKappaSpinner').dispatchEvent(new Event('change'));
+                                        });
+                                    }
+
+                                    if (tSpinner) {
+                                        tSpinner.addEventListener('change', () => {
+                                            window.opener.document.getElementById('anchorTSpinner').value = tSpinner.value;
+                                            window.opener.document.getElementById('anchorTSpinner').dispatchEvent(new Event('change'));
+                                        });
+                                    }
+
+                                    if (succXLink) {
+                                        succXLink.addEventListener('click', (e) => {
+                                            e.preventDefault();
+                                            window.opener.document.querySelector('.succ-x-link').click();
+                                        });
+                                    }
+                                }
+                            });
+
+                            window.addEventListener('beforeunload', () => {
+                                window.opener.postMessage({ type: 'popoutClosed', name: 'anchorBlock' }, '*');
+                            });
+                        <\/script>
+                    </body>
+                    </html>
+                `);
+                win.document.close();
+
+                // Store reference for updates
+                this.anchorBlockPopout = win;
+            }
+
+            popoutLatticeParameters() {
+                // Check if already popped out
+                if (this.latticeParametersPopout && !this.latticeParametersPopout.closed) {
+                    this.latticeParametersPopout.focus();
+                    return;
+                }
+
+                const infoPanel = document.getElementById('infoPanel');
+                const infoContent = document.getElementById('infoContent');
+                if (!infoContent || infoContent.innerHTML.trim() === '') {
+                    alert('No lattice parameters to display. Plot a sequence first.');
+                    return;
+                }
+
+                const win = window.open('about:blank', 'LatticeParameters', 'popup=yes,width=600,height=800,left=400,top=150,resizable=yes,scrollbars=yes');
+                if (!win) return;
+
+                // Hide the info panel in main window
+                infoPanel.style.display = 'none';
+
+                win.document.write(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Lattice Parameters</title>
+                        <style>
+                            body { margin: 0; padding: 20px; background: #0f0f0f; color: #e0e0e0; font-family: Arial, sans-serif; }
+                            ${Array.from(document.styleSheets[0].cssRules).map(rule => rule.cssText).join('\n')}
+                        </style>
+                    </head>
+                    <body>
+                        <div class="info-panel" style="display: block;">
+                            ${infoPanel.innerHTML}
+                        </div>
+                        <script>
+                            // Listen for updates from parent
+                            window.addEventListener('message', (event) => {
+                                if (event.data.type === 'updateLatticeParameters') {
+                                    document.querySelector('.info-panel').innerHTML = event.data.content;
+
+                                    // Re-attach event handlers for congruence links
+                                    document.querySelectorAll('.congruence-link').forEach(link => {
+                                        link.addEventListener('click', (e) => {
+                                            e.preventDefault();
+                                            const href = link.getAttribute('href');
+                                            if (href && href.startsWith('?')) {
+                                                window.opener.location.href = href;
+                                            }
+                                        });
+                                    });
+                                }
+                            });
+
+                            window.addEventListener('beforeunload', () => {
+                                window.opener.postMessage({ type: 'popoutClosed', name: 'latticeParameters' }, '*');
+                            });
+                        <\/script>
+                    </body>
+                    </html>
+                `);
+                win.document.close();
+
+                // Store reference for updates
+                this.latticeParametersPopout = win;
+            }
         }
 
         // Initialize application
         const app = new Application();
+
+        // Attach popout button event listeners
+        document.getElementById('popoutLatticeBtn').addEventListener('click', () => app.popoutLattice());
+        document.getElementById('popoutControlsBtn').addEventListener('click', () => app.popoutControls());
+        document.getElementById('popoutAnchorBtn').addEventListener('click', () => app.popoutAnchorBlock());
+        document.getElementById('popoutParamsBtn').addEventListener('click', () => app.popoutLatticeParameters());
 
         // Plot default example on load
         window.addEventListener('load', () => {

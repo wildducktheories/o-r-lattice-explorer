@@ -142,6 +142,39 @@ Displays unique analytical properties not shown in the anchor block panel:
 - **Theta-line analysis**: θ, cₒ,ᵣ, cₓ, L, ε
 - Appears immediately below the O-R lattice plot
 
+### Pop-out Windows
+
+Each major section can be opened in a separate window for flexible screen layout management:
+
+**Available Pop-outs:**
+- **Lattice Canvas** (⧉ icon in canvas header) - Opens 1250×900 window
+  - Automatically synchronized with main window updates
+  - Renders all layer changes and sequence updates in real-time
+- **Controls** (⧉ icon in controls header) - Opens 800×600 window
+  - All buttons and inputs fully functional in pop-out
+  - Bidirectional synchronization with main window
+  - Changes in either window update the other
+- **Anchor Block** (⧉ icon in anchor section) - Opens 600×800 window
+  - Interactive κ and t spinners work in pop-out
+  - Clickable successor links navigate to new sequences
+  - Updates when new sequence is loaded
+- **Lattice Parameters** (⧉ icon in parameters section) - Opens 600×800 window
+  - Congruence navigation links functional
+  - Updates with sequence changes
+
+**Behavior:**
+- Clicking a pop-out icon hides that section in the main window
+- Other sections flow into freed space (e.g., controls move under lattice)
+- Closing a pop-out window automatically restores the section in main window
+- Clicking pop-out icon when already open focuses the existing window
+- Pop-outs open as actual windows (not tabs) with cascaded positioning
+
+**Use Cases:**
+- Multi-monitor setups: spread sections across displays
+- Focus mode: show only lattice while keeping controls accessible
+- Comparison workflows: keep parameters visible while exploring sequences
+- Screen space optimization: hide sections not currently needed
+
 ## Mathematical Background
 
 ### The O-R Coordinate System
@@ -211,12 +244,13 @@ where:
 
 1. **Load a sequence**: Enter a starting value x₀ and click "Plot Sequence"
 2. **Toggle layers**: Use checkboxes to show/hide different visualizations
-3. **Explore points**: Hover over lattice points to see detailed analysis
-4. **Navigate sequences**:
+3. **Pop out sections**: Click ⧉ icons to open sections in separate windows for flexible layout
+4. **Explore points**: Hover over lattice points to see detailed analysis
+5. **Navigate sequences**:
    - Double-click any lattice point to load its sequence
    - Click congruence links (← prev | current | next →) to explore structurally similar values
    - Browser history is updated, allowing back/forward navigation between sequences
-5. **Animate transformation**: Click "Animate to λₓ" to visualize the geometric relationship
+6. **Animate transformation**: Click "Animate to λₓ" to visualize the geometric relationship
    - Original gold points remain at (o, r) positions
    - Animated copy morphs from gold to green as it moves to (o, -log₂(x))
    - Shows both representations simultaneously during animation

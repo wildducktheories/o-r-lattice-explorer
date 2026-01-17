@@ -1,3 +1,10 @@
 .DS_Store
 .task/
 scratch/**
+
+# LaTeX build products
+*.aux
+*.log
+*.out
+*.pdf
+texput.log

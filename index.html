@@ -473,7 +473,7 @@
 
                     // For even x, compute ν = v₂(x) and work with odd part
                     // For odd x, ν = 0
-                    // Simplified: x+1 = 2^ν · 2^α · (ρ + t·2^(κ-α))
+                    // Simplified: x+1 = 2^ν · 2^α · (ρ + t·2^(κ-α+1))
                     if (currentX % 2 === 0) {
                         tempSteps[i].nu = this.v2(currentX);
                         const xOdd = currentX / Math.pow(2, tempSteps[i].nu);
@@ -482,18 +482,18 @@
                         const mOdd = (xOdd + 1) / Math.pow(2, alphaOdd);
                         const betaOdd = this.v2(Math.pow(3, alphaOdd) * mOdd - 1);
                         const kappaOdd = alphaOdd + betaOdd;
-                        const modulusOdd = Math.pow(2, kappaOdd - alphaOdd);
-                        // ρ = m mod 2^(κ-α)
+                        const modulusOdd = Math.pow(2, kappaOdd - alphaOdd + 1);
+                        // ρ = m mod 2^(κ-α+1)
                         tempSteps[i].rho = mOdd % modulusOdd;
-                        // t = ⌊(m - ρ)/2^(κ-α)⌋
+                        // t = ⌊(m - ρ)/2^(κ-α+1)⌋
                         tempSteps[i].t = Math.floor((mOdd - tempSteps[i].rho) / modulusOdd);
                     } else {
                         tempSteps[i].nu = 0;
                         const kappa = tempSteps[i].alpha + tempSteps[i].beta;
-                        const modulus = Math.pow(2, kappa - tempSteps[i].alpha);
-                        // ρ = m mod 2^(κ-α)
+                        const modulus = Math.pow(2, kappa - tempSteps[i].alpha + 1);
+                        // ρ = m mod 2^(κ-α+1)
                         tempSteps[i].rho = tempSteps[i].m % modulus;
-                        // t = ⌊(m - ρ)/2^(κ-α)⌋
+                        // t = ⌊(m - ρ)/2^(κ-α+1)⌋
                         tempSteps[i].t = Math.floor((tempSteps[i].m - tempSteps[i].rho) / modulus);
                     }
                 }
@@ -616,7 +616,7 @@
                 const x_odd = Math.floor(x / Math.pow(2, nu));
 
                 // Step 2: Compute alpha and m_raw from x_odd + 1
-                // Identity: x+1 = 2^ν · 2^α · (ρ + t·2^(κ-α))
+                // Identity: x+1 = 2^ν · 2^α · (ρ + t·2^(κ-α+1))
                 const alpha = this.v2(x_odd + 1);
                 const m_raw = Math.floor((x_odd + 1) / Math.pow(2, alpha));
 
@@ -633,7 +633,7 @@
                 }
 
                 // Step 5: Compute ρ and t
-                const modulus = Math.pow(2, kappa - alpha);
+                const modulus = Math.pow(2, kappa - alpha + 1);
                 const rho = m_raw % modulus;
 
                 // ρ must be odd
@@ -649,7 +649,7 @@
                 }
 
                 // Step 6: Reconstruct x from parameters (should equal input x)
-                // x = 2^ν · (2^α · (ρ + t·2^(κ-α)) - 1)
+                // x = 2^ν · (2^α · (ρ + t·2^(κ-α+1)) - 1)
                 const xComputed = Math.pow(2, nu) * (Math.pow(2, alpha) * (rho + t * modulus) - 1);
 
                 return { alpha, nu, rho, kappa, beta, modulus, t, x: xComputed };
@@ -2290,8 +2290,8 @@
                     lines.push(`x / 2^ν = ${x_odd}`);
                 }
                 lines.push(`α = v₂(x/2^ν + 1) = ${step.alpha}`);
-                lines.push(`ρ = (x+1)/2^α mod 2^(κ-α) = ${step.rho}`);
-                lines.push(`t = ⌊((x+1)/2^α - ρ)/2^(κ-α)⌋ = ${step.t}`);
+                lines.push(`ρ = (x+1)/2^α mod 2^(κ-α+1) = ${step.rho}`);
+                lines.push(`t = ⌊((x+1)/2^α - ρ)/2^(κ-α+1)⌋ = ${step.t}`);
                 lines.push('');
 
                 // GROUP D: Block Classification
@@ -2303,11 +2303,11 @@
 
                 // GROUP E: Affine Functions
                 if (step.x % 2 === 0) {
-                    lines.push(`x(B,t) = 2^ν·(2^α·(ρ + t·2^κ-α) - 1) = ${step.x}`);
+                    lines.push(`x(B,t) = 2^ν·(2^α·(ρ + t·2^(κ-α+1)) - 1) = ${step.x}`);
                 } else {
-                    lines.push(`x(B,t) = 2^α·(ρ + t·2^κ-α) - 1 = ${step.x}`);
+                    lines.push(`x(B,t) = 2^α·(ρ + t·2^(κ-α+1)) - 1 = ${step.x}`);
                 }
-                const succ_x = (Math.pow(3, step.alpha) * step.rho - 1) / Math.pow(2, kappa - step.alpha) + Math.pow(3, step.alpha) * step.t;
+                const succ_x = (Math.pow(3, step.alpha) * step.rho - 1) / Math.pow(2, kappa - step.alpha) + 2 * Math.pow(3, step.alpha) * step.t;
                 const succ_x_display = Number.isInteger(succ_x) ? succ_x : succ_x.toFixed(2);
                 lines.push(`succ_x(B,t) = ${succ_x_display}`);
                 lines.push('');
@@ -2947,7 +2947,7 @@
                 const maxKappa = params.alpha + params.beta;
                 lines.push(`κ = <input type="number" id="anchorKappaSpinner" value="${effectiveAnchorK}" min="${minKappa}" max="${maxKappa}" step="1" style="width: 60px;">`);
 
-                lines.push(`ρ = (x/2<sup>ν</sup>+1)/2<sup>α</sup> mod 2<sup>κ-α</sup> = ${params.rho}`);
+                lines.push(`ρ = (x/2<sup>ν</sup>+1)/2<sup>α</sup> mod 2<sup>κ-α+1</sup> = ${params.rho}`);
 
                 // t spinner (t >= 0)
                 lines.push(`t = <input type="number" id="anchorTSpinner" value="${params.t}" min="0" step="1" style="width: 60px;">`);
@@ -2963,15 +2963,15 @@
                 lines.push(''); // Blank line
 
                 // GROUP E: Affine Functions
-                lines.push(`x(B,t) = 2<sup>ν</sup>·(2<sup>α</sup>·(ρ + t·2<sup>κ-α</sup>) - 1) = ${x0}`);
-                const succ_x = (Math.pow(3, params.alpha) * params.rho - 1) / params.modulus + Math.pow(3, params.alpha) * params.t;
+                lines.push(`x(B,t) = 2<sup>ν</sup>·(2<sup>α</sup>·(ρ + t·2<sup>κ-α+1</sup>) - 1) = ${x0}`);
+                const succ_x = (Math.pow(3, params.alpha) * params.rho - 1) / Math.pow(2, params.kappa - params.alpha) + 2 * Math.pow(3, params.alpha) * params.t;
                 let succ_x_display;
                 if (Number.isInteger(succ_x)) {
                     succ_x_display = `<a href="#" class="succ-x-link" data-x="${succ_x}">${succ_x}</a>`;
                 } else {
                     succ_x_display = succ_x.toFixed(2);
                 }
-                lines.push(`succ<sub>x</sub>(B,t) = (3<sup>α</sup>·ρ - 1)/2<sup>κ-α</sup> + 3<sup>α</sup>·t = ${succ_x_display}`);
+                lines.push(`succ<sub>x</sub>(B,t) = (3<sup>α</sup>·ρ - 1)/2<sup>κ-α</sup> + 2·3<sup>α</sup>·t = ${succ_x_display}`);
 
                 document.getElementById('anchorContent').innerHTML = lines.join('<br>');
 
@@ -2996,8 +2996,8 @@
                         tSpinner.addEventListener('change', () => {
                             const newT = parseInt(tSpinner.value);
                             if (!isNaN(newT) && newT >= 0) {
-                                // Calculate new x from the affine function: x = 2^ν·(2^α·(ρ + t·2^(κ-α)) - 1)
-                                const newX = Math.pow(2, params.nu) * (Math.pow(2, params.alpha) * (params.rho + newT * Math.pow(2, effectiveAnchorK - params.alpha)) - 1);
+                                // Calculate new x from the affine function: x = 2^ν·(2^α·(ρ + t·2^(κ-α+1)) - 1)
+                                const newX = Math.pow(2, params.nu) * (Math.pow(2, params.alpha) * (params.rho + newT * Math.pow(2, effectiveAnchorK - params.alpha + 1)) - 1);
                                 this.loadSequenceForX(newX, effectiveAnchorK);
                             }
                         });

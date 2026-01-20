@@ -10,10 +10,10 @@ The block parameter system has been simplified to focus exclusively on lattice-w
 
 **Current Parameters:**
 - **4 block parameters**: (α, ν, ρ, κ) plus scaling parameter t
-- **Fundamental identity**: x = 2^ν · (2^α · (ρ + t·2^(κ-α)) - 1)
+- **Fundamental identity**: x = 2^ν · (2^α · (ρ + t·2^(κ-α+1)) - 1)
 - **Affine functions**:
-  - x(B,t) = 2^ν·(2^α·(ρ + t·2^(κ-α)) - 1)
-  - succ_x(B,t) = (3^α·ρ - 1)/2^(κ-α) + 3^α·t
+  - x(B,t) = 2^ν·(2^α·(ρ + t·2^(κ-α+1)) - 1)
+  - succ_x(B,t) = (3^α·ρ - 1)/2^(κ-α) + 2·3^α·t
 
 **Why this matters:**
 Previous approaches (6 parameters, then 5) attempted to capture both internal block dynamics (3-adic structure) and lattice-wide relationships simultaneously, causing instability. The current 4-parameter approach eliminates 3-adic parameters entirely, focusing only on affine structure. This provides a clean, minimal representation without internal dynamics complications.
@@ -104,7 +104,7 @@ The anchor block panel provides interactive exploration of block parameter space
   - Changes the block's modular structure
   - Updates all derived parameters in real-time
 - **t spinner**: Navigate along affine families (t ≥ 0)
-  - Automatically calculates new x using affine function: x(B,t) = 2^ν·(2^α·(ρ + t·2^(κ-α)) - 1)
+  - Automatically calculates new x using affine function: x(B,t) = 2^ν·(2^α·(ρ + t·2^(κ-α+1)) - 1)
   - Loads the new sequence immediately
 - **succ_x links**: Click integer successor values to navigate to next block
   - Jumps to the successor's natural block (κ = α + β)
@@ -191,7 +191,7 @@ This coordinate system transforms the chaotic-appearing Collatz sequence into st
 The affine block structure uses:
 - **ν (nu)** = v₂(x): Leading even steps in E*(OE)+E+ pattern
 - **α (alpha)** = v₂(x/2^ν + 1): 2-adic valuation of odd core plus one
-- **ρ (rho)**: Odd residue parameter, ρ = (x/2^ν+1)/2^α mod 2^(κ-α)
+- **ρ (rho)**: Odd residue parameter, ρ = (x/2^ν+1)/2^α mod 2^(κ-α+1)
 - **κ (kappa)**: Block length (number of even steps in the block)
 - **t**: Scaling parameter enumerating block instances
 - **β (beta)** = v₂(3^α·(x+1)/2^α - 1): Natural block indicator (κ_natural = α + β)

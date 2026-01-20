@@ -2640,9 +2640,9 @@
 
                 // x and x→ with symbolic and numeric forms
                 if (displayX % 2 === 0) {
-                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1) = ${m_x}t + ${c_x}`);
+                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1) = ${m_x}t + ${c_x} = ${displayX}`);
                 } else {
-                    lines.push(`x = 2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1 = ${m_x}t + ${c_x}`);
+                    lines.push(`x = 2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1 = ${m_x}t + ${c_x} = ${displayX}`);
                 }
                 const xSuccDisplay = `<a href="#" class="succ-x-link" data-x="${params.xSucc}">${params.xSucc}</a>`;
                 lines.push(`x<sup>→</sup> = (3<sup>α</sup>ρ - 1)/2<sup>β</sup> + 2·3<sup>α</sup>·t = ${m_succ}t + ${c_succ} = ${xSuccDisplay}`);

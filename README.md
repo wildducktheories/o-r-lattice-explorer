@@ -4,31 +4,25 @@ Interactive web-based visualization tool for exploring Collatz sequences on the 
 
 ## Recent Updates
 
-### Simplified Block Parameterization (January 2026)
+### Selected Block with Visual Highlighting (January 2026)
 
-The block parameter system has been simplified to focus exclusively on lattice-wide affine relationships:
+The block selection system allows interactive exploration of Steiner blocks within a sequence:
 
-**Current Parameters:**
-- **4 block parameters**: (α, ν, ρ, κ) plus scaling parameter t
-- **Fundamental identity**: x = 2^ν · (2^α · (ρ + t·2^(κ-α+1)) - 1)
-- **Affine functions**:
-  - x(B,t) = 2^ν·(2^α·(ρ + t·2^(κ-α+1)) - 1)
-  - succ_x(B,t) = (3^α·ρ - 1)/2^(κ-α) + 2·3^α·t
+**Block Selection:**
+- **Swipe-to-select**: Drag on the lattice to select the rightmost odd term inside the selection
+- **Visual highlighting**: Selected block region is highlighted with a blue band (±⅓ grid square margins)
+- **Independent selection**: Selecting a block does NOT change x₀—only the displayed block changes
+- **Successor navigation**: Click x→ to navigate to the next block in the chain
 
-**Why this matters:**
-Previous approaches (6 parameters, then 5) attempted to capture both internal block dynamics (3-adic structure) and lattice-wide relationships simultaneously, causing instability. The current 4-parameter approach eliminates 3-adic parameters entirely, focusing only on affine structure. This provides a clean, minimal representation without internal dynamics complications.
-
-**Interactive Anchor Block Panel:**
-- **Parameter display**: x, o, r, e, n=3o-r, ν, α, κ, ρ, t, β
-- **Interactive spinners**:
-  - κ spinner constrained to [α, α+β]
-  - t spinner (t ≥ 0) with automatic x recalculation via affine function
-- **Clickable successor**: Integer succ_x values link to navigate sequences
-- **Natural block detection**: Shows whether κ = α + β
+**Selected Block Panel:**
+- **x**: The selected odd value with its affine formula
+- **x→**: Clickable successor link (changes selection, not x₀)
+- **Block parameters**: α, β, ρ, t, κ (natural blocks only, κ = α + β)
+- **t spinner**: Changing t recalculates x₀ using the affine function
 
 **Lattice Parameters Panel:**
-- Unique analytical properties: x_fd, λₓ, λₖ, d, k, θ analysis
-- Separated from anchor block to eliminate duplicate information
+- First descent term with congruence navigation
+- Unique analytical properties: λₓ, λₖ, d, k, θ analysis
 
 See `CHANGES.md` for detailed technical documentation and `papers/affine-block-structures.pdf` for mathematical details.
 
@@ -78,47 +72,38 @@ These lines provide bidirectional estimation:
 
 Hover over any lattice point to see detailed information organized into two sections:
 
-**Anchor Block (interactive on hover):**
-- Lattice position: x, o, r, e, n=3o-r
-- Block parameters: ν, α, κ, ρ, t
-- Block classification: β, natural (κ = α + β)
-- Affine functions: x(B,t), succ_x(B,t) with slopes and intercepts
+**Selected Block:**
+- x and x→ (successor) with affine formulas
+- Block parameters: α, β, ρ, t, κ
 
 **Lattice Parameters:**
+- Lattice position: o, r, e, n=3o-r
 - First descent: x_fd with congruence navigation
 - Lambda values: λₓ = log₂(x), λₖ = log₂(k)
-- Derived parameters: d = 2^(2o-r) - 3^o, k = 2^e - 3^o·x
-- Theta-line analysis:
-  - θ = 2 - log₂(3)
-  - cₒ,ᵣ = θ·o - r: intercept of x-estimator
-  - cₓ = log₂(x): intercept of (o,r)-estimator
-  - L = cₒ,ᵣ/√(1+θ²): normal distance from origin
-  - ε = (cₒ,ᵣ - cₓ)/√(1+θ²): error between estimators
+- Theta-line analysis: θ, cₒ,ᵣ, cₓ, L, ε
 
-### Anchor Block Panel
+### Selected Block Panel
 
-The anchor block panel provides interactive exploration of block parameter space:
+The selected block panel displays the Steiner block for the currently selected odd term:
+
+**Block Selection:**
+- **Swipe-to-select**: Drag on the lattice to select the rightmost odd inside the swipe region
+- **Visual highlighting**: The selected block's region is highlighted on the lattice
+- **x→ navigation**: Click the successor link to select the next block (does not change x₀)
 
 **Interactive Controls:**
-- **κ spinner**: Adjust block length within range [α, α+β]
-  - Changes the block's modular structure
-  - Updates all derived parameters in real-time
 - **t spinner**: Navigate along affine families (t ≥ 0)
-  - Automatically calculates new x using affine function: x(B,t) = 2^ν·(2^α·(ρ + t·2^(κ-α+1)) - 1)
+  - Calculates new x₀ using affine function: x = 2^α·(ρ + t·2^(β+1)) - 1
   - Loads the new sequence immediately
-- **succ_x links**: Click integer successor values to navigate to next block
-  - Jumps to the successor's natural block (κ = α + β)
 
-**Display Sections:**
-1. **Lattice Position**: x, o, r, e, n=3o-r
-2. **Block Parameters**: ν, α, κ, ρ, t
-3. **Block Classification**: β, natural (true/false)
-4. **Affine Functions**: x(B,t), succ_x(B,t) with slopes
+**Display:**
+- x with affine formula
+- x→ (successor) with clickable link
+- Block parameters: α, β, ρ, t, κ = α + β
 
 **URL Parameters:**
-- `?x=27` - Loads sequence with natural block (κ = α + β)
-- `?x=27&anchor_k=3` - Loads sequence with specific κ value
-- Browser history preserves both parameters for back/forward navigation
+- `?x=27` - Loads sequence starting at x₀ = 27
+- Browser history preserves x for back/forward navigation
 
 ### Congruence Navigation
 
@@ -131,16 +116,16 @@ The anchor block panel provides interactive exploration of block parameter space
 **Why This Matters:**
 - Values in congruence families share structural properties
 - Affine translations (via t spinner) explore systematic variations
-- Block length adjustments (via κ spinner) reveal how parity patterns affect dynamics
+- Successor navigation (via x→) reveals block chain structure
 
 ### Lattice Parameters Panel
 
-Displays unique analytical properties not shown in the anchor block panel:
+Displays analytical properties for the hovered point:
+- **Lattice position**: o, r, e, n=3o-r
 - **First descent term** (x_fd) with congruence navigation
 - **Lambda values**: λₓ = log₂(x), λₖ = log₂(k)
 - **Derived parameters**: d = 2^(2o-r) - 3^o, k = 2^e - 3^o·x
 - **Theta-line analysis**: θ, cₒ,ᵣ, cₓ, L, ε
-- Appears immediately below the O-R lattice plot
 
 ### Pop-out Windows
 
@@ -154,10 +139,10 @@ Each major section can be opened in a separate window for flexible screen layout
   - All buttons and inputs fully functional in pop-out
   - Bidirectional synchronization with main window
   - Changes in either window update the other
-- **Anchor Block** (⧉ icon in anchor section) - Opens 600×800 window
-  - Interactive κ and t spinners work in pop-out
-  - Clickable successor links navigate to new sequences
-  - Updates when new sequence is loaded
+- **Selected Block** (⧉ icon in block section) - Opens 600×800 window
+  - Interactive t spinner works in pop-out
+  - Clickable successor links navigate to new blocks
+  - Updates when selection changes
 - **Lattice Parameters** (⧉ icon in parameters section) - Opens 600×800 window
   - Congruence navigation links functional
   - Updates with sequence changes

@@ -2,12 +2,44 @@
 
 ## Summary
 
-Four major revisions have been made since commit c093445:
+Five major revisions have been made since commit c093445:
 
 1. **Swipe-to-Select Anchor Region** - Interactive selection on the lattice canvas
 2. **New Canonical Representation of x** - Fundamental change to how sequence elements are parameterized (5 parameters with γ)
 3. **Simplified 4-Parameter Framework** - Final simplification eliminating 3-adic parameters entirely
 4. **Modulus Correction** - Updated modulus from 2^β to 2^{β+1}
+5. **Selected Block with Visual Highlighting** - Block selection independent of x₀, with lattice highlighting
+
+---
+
+## 5. Selected Block with Visual Highlighting (January 2026)
+
+**Renamed "Anchor Block" to "Selected Block" and made block selection independent of x₀.**
+
+### Key Changes
+
+**Block Selection Behavior:**
+- Swipe-to-select now sets `selectedX` (the displayed block) WITHOUT changing x₀
+- The selected block is highlighted on the lattice with a blue band
+- Margins are ±⅓ grid square from the block boundaries
+- Block extends from selected odd (high o) to lower o by α steps
+
+**Successor Navigation:**
+- Clicking x→ changes the selected block, NOT x₀
+- This allows exploring the block chain without losing the current sequence
+
+**Simplified Parameters:**
+- Removed κ spinner (now only natural blocks where κ = α + β)
+- t spinner still changes x₀ via affine function
+
+**UI Changes:**
+- Renamed all "anchor" references to "selected block"
+- Removed "Viewing block for x = ..." message
+- Block pattern (OE string) shown at top of panel
+
+### Files Changed
+
+- `index.html` - Renamed UI elements, added block highlighting, fixed selection logic
 
 ---
 

@@ -176,7 +176,7 @@
             color: #88c5ff;
         }
 
-        .anchor-section {
+        .selected-block-section {
             margin-top: 10px;
             padding: 10px 15px;
             background: #333;
@@ -184,14 +184,14 @@
             border: 1px solid #4a9eff;
         }
 
-        .anchor-label {
+        .selected-block-label {
             font-weight: 500;
             color: #4a9eff;
             margin-bottom: 5px;
             font-size: 0.9em;
         }
 
-        .anchor-content {
+        .selected-block-content {
             font-family: 'Courier New', monospace;
             color: #e0e0e0;
             padding: 8px;
@@ -201,7 +201,7 @@
             word-break: break-all;
         }
 
-        .anchor-nav {
+        .selected-block-nav {
             margin-top: 8px;
             font-family: 'Courier New', monospace;
             color: #e0e0e0;
@@ -283,13 +283,20 @@
             <canvas id="latticeCanvas" width="1200" height="800"></canvas>
         </div>
 
-        <div id="anchorSection" class="anchor-section" style="display: none;">
-            <div class="anchor-label">
-                Anchor Block
-                <span class="popout-icon" id="popoutAnchorBtn" title="Pop out anchor block">⧉</span>
+        <div class="info-panel">
+            <div class="info-section">
+                <div class="info-label">Sequence (OE notation):</div>
+                <div id="oeSequence" class="info-value">-</div>
             </div>
-            <div id="anchorPattern" class="info-value" style="margin-bottom: 10px;">-</div>
-            <div class="anchor-content" id="anchorContent"></div>
+        </div>
+
+        <div id="selectedBlockSection" class="selected-block-section" style="display: none;">
+            <div class="selected-block-label">
+                Selected Block
+                <span class="popout-icon" id="popoutSelectedBlockBtn" title="Pop out selected block">⧉</span>
+            </div>
+            <div id="selectedBlockPattern" class="info-value" style="margin-bottom: 10px;">-</div>
+            <div class="selected-block-content" id="selectedBlockContent"></div>
         </div>
 
         <div class="controls">
@@ -300,7 +307,7 @@
             <div class="control-row">
                 <label for="x0Input">Starting value (x₀):</label>
                 <input type="number" id="x0Input" value="27" min="1" step="1">
-                <button onclick="app.anchor_k = null; app.plotSequence()">Plot Sequence</button>
+                <button onclick="app.selectedX = null; app.plotSequence()">Plot Sequence</button>
                 <button onclick="app.clearCanvas()">Clear</button>
             </div>
             <div class="control-row">
@@ -337,17 +344,6 @@
                     <span class="popout-icon" id="popoutParamsBtn" title="Pop out lattice parameters">⧉</span>
                 </div>
                 <div class="info-value" id="infoContent"></div>
-            </div>
-        </div>
-
-        <div class="info-panel">
-            <div class="info-section">
-                <div class="info-label">Sequence (OE notation):</div>
-                <div id="oeSequence" class="info-value">-</div>
-            </div>
-            <div class="info-section">
-                <div class="info-label">Sequence length:</div>
-                <div id="seqLength" class="info-value">-</div>
             </div>
         </div>
 
@@ -608,51 +604,32 @@
                 return count;
             }
 
-            // Compute block parameters for x with optional anchor_k
-            // Returns { alpha, nu, rho, kappa, beta, t, x }
-            computeBlockParams(x, anchor_k = null) {
-                // Step 1: Find odd core
+            // Compute block parameters for odd x (or odd core if x is even)
+            // Returns { alpha, rho, beta, kappa, t, x_odd, rhoBar }
+            computeBlockParams(x) {
+                // Step 1: Find odd value to analyze (odd core for even x)
                 const nu = this.v2(x);
-                const x_odd = Math.floor(x / Math.pow(2, nu));
+                const x_odd = (x % 2 === 0) ? x / Math.pow(2, nu) : x;
 
-                // Step 2: Compute alpha and m_raw from x_odd + 1
-                // Identity: x+1 = 2^ν · 2^α · (ρ + t·2^(κ-α+1))
+                // Step 2: Compute alpha and rhoBar from x_odd + 1
+                // Identity: x = 2^α · ρ̄ - 1, where ρ̄ = ρ + t·2^(β+1)
                 const alpha = this.v2(x_odd + 1);
-                const m_raw = Math.floor((x_odd + 1) / Math.pow(2, alpha));
+                const rhoBar = Math.floor((x_odd + 1) / Math.pow(2, alpha));
 
-                // Step 3: Compute beta (natural block)
-                const beta = this.v2(Math.pow(3, alpha) * m_raw - 1);
-                let kappa = beta + alpha;
+                // Step 3: Compute beta = v₂(3^α·ρ - 1)
+                // Since v₂(3^α·ρ̄ - 1) = v₂(3^α·ρ - 1) for all t
+                const beta = this.v2(Math.pow(3, alpha) * rhoBar - 1);
+                const kappa = alpha + beta;
 
-                // Step 4: Override kappa if anchor_k provided
-                if (anchor_k !== null) {
-                    if (anchor_k < alpha || anchor_k > alpha + beta) {
-                        throw new Error(`anchor_k = ${anchor_k} is out of range [${alpha}, ${alpha + beta}]`);
-                    }
-                    kappa = anchor_k;
-                }
+                // Step 4: Compute ρ and t
+                const modulus = Math.pow(2, beta + 1);
+                const rho = rhoBar % modulus;
+                const t = Math.floor((rhoBar - rho) / modulus);
 
-                // Step 5: Compute ρ and t
-                const modulus = Math.pow(2, kappa - alpha + 1);
-                const rho = m_raw % modulus;
+                // Step 5: Compute x→ (successor - first odd of next Steiner circuit)
+                const xSucc = (Math.pow(3, alpha) * rhoBar - 1) / Math.pow(2, beta);
 
-                // ρ must be odd
-                if (rho % 2 === 0) {
-                    throw new Error(`Invalid ρ value: ρ = ${rho} is even (should be odd)`);
-                }
-
-                const t = Math.floor((m_raw - rho) / modulus);
-
-                // Assertion: t must be non-negative
-                if (t < 0) {
-                    throw new Error(`Invalid t value: t = ${t} for x = ${x} (nu=${nu}, alpha=${alpha}, rho=${rho}, kappa=${kappa}, beta=${beta})`);
-                }
-
-                // Step 6: Reconstruct x from parameters (should equal input x)
-                // x = 2^ν · (2^α · (ρ + t·2^(κ-α+1)) - 1)
-                const xComputed = Math.pow(2, nu) * (Math.pow(2, alpha) * (rho + t * modulus) - 1);
-
-                return { alpha, nu, rho, kappa, beta, modulus, t, x: xComputed };
+                return { alpha, rho, beta, kappa, modulus, t, x_odd, rhoBar, xSucc };
             }
 
             getOEString() {
@@ -833,8 +810,8 @@
             let parts = [`k=${k}:`];
 
             if (prev) {
-                parts.push(`<a href="?x=${prev}&anchor_k=${k}" class="congruence-link">←</a>`);
-                parts.push(`<a href="?x=${prev}&anchor_k=${k}" class="congruence-link">${prev}</a>`);
+                parts.push(`<a href="?x=${prev}" class="congruence-link">←</a>`);
+                parts.push(`<a href="?x=${prev}" class="congruence-link">${prev}</a>`);
             }
 
             parts.push('|');
@@ -842,8 +819,8 @@
             parts.push('|');
 
             if (next) {
-                parts.push(`<a href="?x=${next}&anchor_k=${k}" class="congruence-link">${next}</a>`);
-                parts.push(`<a href="?x=${next}&anchor_k=${k}" class="congruence-link">→</a>`);
+                parts.push(`<a href="?x=${next}" class="congruence-link">${next}</a>`);
+                parts.push(`<a href="?x=${next}" class="congruence-link">→</a>`);
             }
 
             return parts.join(' ');
@@ -1428,8 +1405,8 @@
                 this.selectionRect = null;   // {x, y, width, height}
                 this.onSelectionComplete = null;  // Callback when selection completes
 
-                // Anchor k value for highlighting (derived range computed on render)
-                this.anchor_k = null;
+                // Selected block highlight range {minO, maxO} or null
+                this.selectedBlockRange = null;
 
                 this.initializeLayers();
                 this.setupEventListeners();
@@ -1719,84 +1696,35 @@
             }
 
             processSelection() {
-                const selectedPoints = this.findPointsInSelection();
-
-                if (selectedPoints.length === 0) return;
+                if (!this.selectionRect) return;
                 if (this.sequences.length === 0) return;
 
                 const sequence = this.sequences[0];
+                const { x, width } = this.selectionRect;
+                const rightEdge = x + width;
 
-                // Find rightmost point (highest o value) - defines the block start
-                const rightmostPoint = selectedPoints.reduce((max, p) =>
-                    p.step.o > max.step.o ? p : max
-                );
+                // Find the rightmost odd term whose screen position is INSIDE the selection
+                // (i.e., screenX <= rightEdge)
+                let bestOdd = null;
+                let bestO = -Infinity;
 
-                // Find leftmost point (lowest o value) - used to find first complete block
-                const leftmostPoint = selectedPoints.reduce((min, p) =>
-                    p.step.o < min.step.o ? p : min
-                );
+                for (const step of sequence.steps) {
+                    if (step.x % 2 !== 1) continue;  // Only consider odd terms
 
-                // The rightmost odd term becomes x₀
-                // Find the rightmost odd at or before the rightmost selected point
-                let newX = null;
-                let rightmostOddN = null;
-                for (let i = rightmostPoint.step.n; i >= 0; i--) {
-                    const step = sequence.steps[i];
-                    if (step.x % 2 === 1) {
-                        newX = step.x;
-                        rightmostOddN = i;
-                        break;
+                    const screenX = this.toScreenX(step.o);
+
+                    // Must be inside the selection (at or before right edge)
+                    if (screenX <= rightEdge && step.o > bestO) {
+                        bestO = step.o;
+                        bestOdd = step.x;
                     }
                 }
 
-                if (newX === null) return;
-
-                // Find the first complete block contained within the selection
-                // A complete block means the full (OE)+E+ pattern including all trailing E's
-                const blocks = sequence.findOEBlocks();
-                let anchorBoundaryN = null;
-
-                for (const block of blocks) {
-                    // Block indices in step space (OE string index + 1)
-                    const blockStartStepN = block.start + 1;
-                    const blockEndStepN = block.end + 1;  // Last E in E+ portion
-
-                    // Check if the FULL block (including E+) is contained within selection
-                    // Block must start at or after leftmost and end at or before rightmost
-                    if (blockStartStepN >= leftmostPoint.step.n &&
-                        blockEndStepN <= rightmostPoint.step.n) {
-                        // Use the end of the E+ portion as our anchor boundary
-                        anchorBoundaryN = blockEndStepN;
-                        break; // First complete block found
-                    }
-                }
-
-                // If no complete block found, use the leftmost odd in selection
-                if (anchorBoundaryN === null) {
-                    const oddPoints = selectedPoints.filter(p => p.step.x % 2 === 1);
-                    if (oddPoints.length === 0) return;
-
-                    const leftmostOdd = oddPoints.reduce((min, p) =>
-                        p.step.o < min.step.o ? p : min
-                    );
-                    anchorBoundaryN = leftmostOdd.step.n;
-                }
-
-                // Count even steps between anchor boundary and rightmost odd
-                // anchorBoundaryN is to the LEFT (lower o), rightmostOddN is to the RIGHT (higher o)
-                let anchor_k = 0;
-                const startN = Math.min(anchorBoundaryN, rightmostOddN);
-                const endN = Math.max(anchorBoundaryN, rightmostOddN);
-                for (let i = startN + 1; i < endN; i++) {
-                    const step = sequence.steps[i];
-                    if (step && step.x % 2 === 0) {
-                        anchor_k++;
-                    }
-                }
+                if (bestOdd === null) return;
 
                 // Trigger callback to application
                 if (this.onSelectionComplete) {
-                    this.onSelectionComplete(newX, anchor_k);
+                    this.onSelectionComplete(bestOdd);
                 }
             }
 
@@ -1822,44 +1750,17 @@
                 this.ctx.setLineDash([]);
             }
 
-            computeAnchorRange() {
-                // Derive anchor range from anchor_k and current sequence
-                if (this.anchor_k === null || this.anchor_k < 0) return null;
-                if (this.sequences.length === 0) return null;
+            drawSelectedBlockRange() {
+                if (!this.selectedBlockRange) return;
 
-                const sequence = this.sequences[0];
-                const steps = sequence.steps;
-                if (steps.length === 0) return null;
+                const { minO, maxO } = this.selectedBlockRange;
 
-                // Start at step 0, count evens, find the last odd within anchor_k evens
-                let evenCount = 0;
-                let lastOddO = steps[0].o;
-
-                for (let i = 1; i < steps.length; i++) {
-                    const step = steps[i];
-                    if (step.x % 2 === 0) {
-                        evenCount++;
-                        if (evenCount > this.anchor_k) {
-                            break; // Exceeded anchor_k evens
-                        }
-                    } else {
-                        lastOddO = step.o; // Update last odd within range
-                    }
-                }
-
-                return { minO: steps[0].o, maxO: lastOddO };
-            }
-
-            drawAnchorRange() {
-                const anchorRange = this.computeAnchorRange();
-                if (!anchorRange) return;
-
-                const { minO, maxO } = anchorRange;
-                // Offset boundaries outward by 1/3 of a grid square on each side
-                // Left boundary at o_left - 1/3, right boundary at o_right + 1/3
+                // Offset boundaries by 1/3 of a grid square
+                // Left boundary: 1/3 square to the LEFT of minO
+                // Right boundary: 1/3 square to the RIGHT of maxO
                 const offset = this.transform.scale / 3;
-                const leftX = this.toScreenX(minO) + offset;
-                const rightX = this.toScreenX(maxO) - offset;
+                const leftX = this.toScreenX(minO) - offset;
+                const rightX = this.toScreenX(maxO) + offset;
                 const width = rightX - leftX;
 
                 // Draw semi-transparent highlight band
@@ -2128,8 +2029,8 @@
                 // Draw lambda_x reference line
                 this.drawLambdaXLine(rightAxisTransform);
 
-                // Draw anchor range highlight (persistent selection)
-                this.drawAnchorRange();
+                // Draw selected block highlight (persistent)
+                this.drawSelectedBlockRange();
 
                 // Draw selection rectangle if selecting
                 if (this.isSelecting && this.selectionRect) {
@@ -2271,49 +2172,46 @@
                     lines.push('');
                 }
 
-                // SECTION 1: Anchor Block Panel (static version)
-                lines.push('--- Anchor Block ---');
+                // SECTION 1: Selected Block Panel (static version)
+                lines.push('--- Selected Block ---');
 
-                // GROUP A+B: Context & Lattice Position
-                lines.push(`x = ${step.x}`);
-                lines.push(`o = ${step.o}`);
-                lines.push(`r = ${step.r}`);
-                lines.push(`e = ${step.e}`);
-                const n_tooltip = 3 * step.o - step.r;
-                lines.push(`n = 3o - r = ${n_tooltip}`);
-                lines.push('');
+                // Block Parameters (derived from odd core)
+                const nu = this.sequences[0].v2(step.x);
+                const x_odd = step.x % 2 === 0 ? step.x / Math.pow(2, nu) : step.x;
+                const alpha_odd = this.sequences[0].v2(x_odd + 1);
+                const rhoBar_odd = (x_odd + 1) / Math.pow(2, alpha_odd);
+                const beta_odd = this.sequences[0].v2(Math.pow(3, alpha_odd) * rhoBar_odd - 1);
+                const kappa = alpha_odd + beta_odd;
+                const modulus = Math.pow(2, beta_odd + 1);
+                const rho_odd = rhoBar_odd % modulus;
+                const t_odd = Math.floor((rhoBar_odd - rho_odd) / modulus);
+                const xSucc = (Math.pow(3, alpha_odd) * rhoBar_odd - 1) / Math.pow(2, beta_odd);
 
-                // GROUP C: Block Parameters
-                lines.push(`ν = v₂(x) = ${step.nu}`);
-                const x_odd = step.nu === 0 ? step.x : Math.floor(step.x / Math.pow(2, step.nu));
-                if (step.nu > 0) {
-                    lines.push(`x / 2^ν = ${x_odd}`);
-                }
-                lines.push(`α = v₂(x/2^ν + 1) = ${step.alpha}`);
-                lines.push(`ρ = (x+1)/2^α mod 2^(κ-α+1) = ${step.rho}`);
-                lines.push(`t = ⌊((x+1)/2^α - ρ)/2^(κ-α+1)⌋ = ${step.t}`);
-                lines.push('');
-
-                // GROUP D: Block Classification
-                lines.push(`β = v₂(3^α·(x+1)/2^α - 1) = ${step.beta}`);
-                const kappa = step.alpha + step.beta;
-                lines.push(`κ = α + β = ${kappa}`);
-                lines.push(`natural = true`);
-                lines.push('');
-
-                // GROUP E: Affine Functions
+                // x and x→ first
                 if (step.x % 2 === 0) {
-                    lines.push(`x(B,t) = 2^ν·(2^α·(ρ + t·2^(κ-α+1)) - 1) = ${step.x}`);
+                    lines.push(`x = 2^ν·(2^α(ρ + t·2^(β+1)) - 1) = ${step.x}`);
                 } else {
-                    lines.push(`x(B,t) = 2^α·(ρ + t·2^(κ-α+1)) - 1 = ${step.x}`);
+                    lines.push(`x = 2^α(ρ + t·2^(β+1)) - 1 = ${step.x}`);
                 }
-                const succ_x = (Math.pow(3, step.alpha) * step.rho - 1) / Math.pow(2, kappa - step.alpha) + 2 * Math.pow(3, step.alpha) * step.t;
-                const succ_x_display = Number.isInteger(succ_x) ? succ_x : succ_x.toFixed(2);
-                lines.push(`succ_x(B,t) = ${succ_x_display}`);
+                lines.push(`x→ = ${xSucc}`);
                 lines.push('');
+
+                // Block parameters
+                if (step.x % 2 === 0) {
+                    lines.push(`ν=${nu}, α=${alpha_odd}, β=${beta_odd}, ρ=${rho_odd}, t=${t_odd}`);
+                } else {
+                    lines.push(`α=${alpha_odd}, β=${beta_odd}, ρ=${rho_odd}, t=${t_odd}`);
+                }
+                lines.push(`κ = α + β = ${kappa}`);
 
                 // SECTION 2: Lattice Parameters
                 lines.push('--- Lattice Parameters ---');
+                const n_tooltip = 3 * step.o - step.r;
+                lines.push(`o = ${step.o}`);
+                lines.push(`r = ${step.r}`);
+                lines.push(`e = 2o - r = ${step.e}`);
+                lines.push(`n = 3o - r = o + e = ${n_tooltip}`);
+                lines.push('');
 
                 // First descent term
                 if (this.descentTerm) {
@@ -2612,12 +2510,12 @@
                 this.renderer = new LatticeRenderer('latticeCanvas');
                 this.heatmapRenderer = new HeatmapRenderer('heatmapCanvas');
                 this.currentSequence = null;
+                this.selectedX = null;  // The odd x whose block is displayed (null = use x0)
                 this.isInitialLoad = true;
-                this.anchor_k = null;  // Track congruence navigation anchor
 
                 // Set up double-click handler
                 this.renderer.onPointDoubleClick = (x) => {
-                    this.loadSequenceForX(x, null);  // Clear anchor when double-clicking
+                    this.loadSequenceForX(x);
                 };
 
                 // Set up animation complete handler
@@ -2626,27 +2524,22 @@
                 };
 
                 // Set up selection complete handler
-                this.renderer.onSelectionComplete = (x, anchor_k) => {
-                    document.getElementById('x0Input').value = x;
-                    this.anchor_k = anchor_k;
-                    this.plotSequence();
-                    this.updateAnchorSection();
+                // Swipe sets selectedX without changing x0
+                this.renderer.onSelectionComplete = (x) => {
+                    this.setSelectedX(x);
                 };
 
                 // Handle browser back/forward buttons
                 window.addEventListener('popstate', (e) => {
-                    // Get x and anchor_k from state or URL
-                    let x, anchor_k;
+                    // Get x from state or URL
+                    let x;
                     if (e.state && e.state.x) {
                         x = e.state.x;
-                        anchor_k = e.state.anchor_k;
                     } else {
                         const urlParams = new URLSearchParams(window.location.search);
                         x = parseInt(urlParams.get('x')) || 27;
-                        anchor_k = parseInt(urlParams.get('anchor_k'));
                     }
 
-                    this.anchor_k = !isNaN(anchor_k) ? anchor_k : null;
                     document.getElementById('x0Input').value = x;
                     // Don't update history when handling popstate
                     this.isInitialLoad = true;
@@ -2666,14 +2559,14 @@
                         } else if (event.data.name === 'controls') {
                             document.querySelector('.controls').style.display = 'block';
                             this.controlsPopout = null;
-                        } else if (event.data.name === 'anchorBlock') {
+                        } else if (event.data.name === 'selectedBlock') {
                             // Only show if there's content to display
-                            const anchorSection = document.getElementById('anchorSection');
-                            const anchorContent = document.getElementById('anchorContent');
-                            if (anchorContent && anchorContent.innerHTML.trim() !== '') {
-                                anchorSection.style.display = 'block';
+                            const selectedBlockSection = document.getElementById('selectedBlockSection');
+                            const selectedBlockContent = document.getElementById('selectedBlockContent');
+                            if (selectedBlockContent && selectedBlockContent.innerHTML.trim() !== '') {
+                                selectedBlockSection.style.display = 'block';
                             }
-                            this.anchorBlockPopout = null;
+                            this.selectedBlockPopout = null;
                         } else if (event.data.name === 'latticeParameters') {
                             // Only show if there's content to display
                             const infoPanel = document.getElementById('infoPanel');
@@ -2690,21 +2583,15 @@
             }
 
             loadFromURL() {
-                // Read x and anchor_k from query string
+                // Read x from query string
                 const urlParams = new URLSearchParams(window.location.search);
                 const xParam = urlParams.get('x');
-                const anchorKParam = urlParams.get('anchor_k');
 
                 if (xParam) {
                     const x = parseInt(xParam);
                     if (!isNaN(x) && x > 0) {
                         document.getElementById('x0Input').value = x;
                     }
-                }
-
-                if (anchorKParam) {
-                    const anchor_k = parseInt(anchorKParam);
-                    this.anchor_k = !isNaN(anchor_k) ? anchor_k : null;
                 }
             }
 
@@ -2715,33 +2602,24 @@
                         e.preventDefault();
                         const href = e.target.getAttribute('href');
 
-                        // Parse both x and anchor_k from URL
+                        // Parse x from URL
                         const url = new URL(href, window.location.origin);
                         const x = parseInt(url.searchParams.get('x'));
-                        const anchor_k = parseInt(url.searchParams.get('anchor_k'));
 
                         if (!isNaN(x)) {
-                            this.loadSequenceForX(x, anchor_k);
+                            this.loadSequenceForX(x);
                         }
                     }
                 });
             }
 
-            updateURL(x, anchor_k = null) {
+            updateURL(x) {
                 // Update URL without reloading the page, storing state for back button
                 const url = new URL(window.location);
                 url.searchParams.set('x', x);
-
-                if (anchor_k !== null && !isNaN(anchor_k)) {
-                    url.searchParams.set('anchor_k', anchor_k);
-                } else {
-                    url.searchParams.delete('anchor_k');
-                }
+                url.searchParams.delete('anchor_k'); // Clean up legacy parameter
 
                 const state = { x: x };
-                if (anchor_k !== null && !isNaN(anchor_k)) {
-                    state.anchor_k = anchor_k;
-                }
 
                 if (this.isInitialLoad) {
                     // Replace state on initial load to avoid creating extra history entry
@@ -2763,7 +2641,6 @@
 
             updateInfo(sequence) {
                 document.getElementById('oeSequence').textContent = sequence.getOEString();
-                document.getElementById('seqLength').textContent = sequence.steps.length - 1; // Exclude start
 
                 // Update x₀ info panel
                 this.updateX0Info(sequence);
@@ -2782,6 +2659,14 @@
                 const epsilon = (c_or - c_x) / normFactor;
 
                 const lines = [];
+
+                // Lattice position (same format as tooltip)
+                const n = 3 * step.o - step.r;
+                lines.push(`o = ${step.o}`);
+                lines.push(`r = ${step.r}`);
+                lines.push(`e = 2o - r = ${step.e}`);
+                lines.push(`n = 3o - r = o + e = ${n}`);
+                lines.push(''); // Blank line
 
                 // First descent term
                 const descentTerm = sequence.findFirstDescentTerm(step);
@@ -2866,9 +2751,6 @@
                         return;
                     }
 
-                    // Pass anchor_k to renderer for highlighting
-                    this.renderer.anchor_k = this.anchor_k;
-
                     const sequence = new CollatzSequence(x0);
                     this.currentSequence = sequence;
                     this.renderer.clear();
@@ -2877,11 +2759,11 @@
                     this.heatmapRenderer.render(sequence);
                     this.updateInfo(sequence);
 
-                    // Update URL to reflect current x value and anchor_k
-                    this.updateURL(x0, this.anchor_k);
+                    // Update URL to reflect current x value
+                    this.updateURL(x0);
 
-                    // Update anchor section display
-                    this.updateAnchorSection();
+                    // Update selected block section display
+                    this.updateSelectedBlockSection();
 
                 } catch (error) {
                     this.showError(error.message);
@@ -2889,164 +2771,140 @@
                 }
             }
 
-            updateAnchorSection() {
-                const section = document.getElementById('anchorSection');
+            updateSelectedBlockSection() {
+                const section = document.getElementById('selectedBlockSection');
 
                 if (!this.currentSequence) {
                     section.style.display = 'none';
+                    this.renderer.selectedBlockRange = null;
+                    this.renderer.render();
                     return;
                 }
 
                 section.style.display = 'block';
 
                 const x0 = this.currentSequence.steps[0].x;
+                // Use selectedX if set, otherwise use x0
+                const displayX = this.selectedX !== null ? this.selectedX : x0;
 
-                // If anchor_k is null, default to natural block (κ = α + β)
-                let effectiveAnchorK = this.anchor_k;
-                if (effectiveAnchorK === null) {
-                    const tempParams = this.currentSequence.computeBlockParams(x0, null);
-                    effectiveAnchorK = tempParams.alpha + tempParams.beta;
-                }
+                // Compute block parameters for the selected x
+                const params = this.currentSequence.computeBlockParams(displayX);
 
-                const params = this.currentSequence.computeBlockParams(x0, effectiveAnchorK);
+                // Create sequence for displayX to get actual o, r, e values
+                const blockSequence = new CollatzSequence(displayX);
+                const prefix = blockSequence.getOEPrefixWithKEvens(params.kappa);
 
-                // Create sequence for x0 to get actual o, r, e values at anchor_k
-                const blockSequence = new CollatzSequence(x0);
-                const prefix = blockSequence.getOEPrefixWithKEvens(effectiveAnchorK);
-
-                // Display pattern in its own section (like OE sequences elsewhere)
-                document.getElementById('anchorPattern').textContent = prefix;
-
-                // Use o, r, e values from x0 itself
-                const s0 = blockSequence.steps[0];
-                const o = s0.o;
-                const r = s0.r;
-                const e = s0.e;
+                // Display pattern in its own section
+                document.getElementById('selectedBlockPattern').textContent = prefix;
 
                 const lines = [];
 
-                // GROUP A+B: Context & Lattice Position
-                lines.push(`x = ${x0}`);
-                lines.push(`o = ${o}`);
-                lines.push(`r = ${r}`);
-                lines.push(`e = ${e}`);
-                const n = 3 * o - r;
-                lines.push(`n = 3o - r = ${n}`);
-                lines.push(''); // Blank line
+                // Compute ν for even x
+                const nu = blockSequence.v2(displayX);
 
-                // GROUP C: Block Parameters B = (α, ν, ρ, κ), t
-                lines.push(`ν = v₂(x) = ${params.nu}`);
-                const x_odd = params.nu === 0 ? x0 : Math.floor(x0 / Math.pow(2, params.nu));
-                if (params.nu > 0) {
-                    lines.push(`x / 2<sup>ν</sup> = ${x_odd}`);
-                }
-                lines.push(`α = v₂(x/2<sup>ν</sup> + 1) = ${params.alpha}`);
-
-                // κ spinner (constrained to [α, α+β])
-                const minKappa = params.alpha;
-                const maxKappa = params.alpha + params.beta;
-                lines.push(`κ = <input type="number" id="anchorKappaSpinner" value="${effectiveAnchorK}" min="${minKappa}" max="${maxKappa}" step="1" style="width: 60px;">`);
-
-                lines.push(`ρ = (x/2<sup>ν</sup>+1)/2<sup>α</sup> mod 2<sup>κ-α+1</sup> = ${params.rho}`);
-
-                // t spinner (t >= 0)
-                lines.push(`t = <input type="number" id="anchorTSpinner" value="${params.t}" min="0" step="1" style="width: 60px;">`);
-
-                lines.push(''); // Blank line
-
-                // GROUP D: Block Classification
-                // Compute m_raw internally but inline the formula in display
-                const m_raw = Math.floor((x_odd + 1) / Math.pow(2, params.alpha));
-                lines.push(`β = v₂(3<sup>α</sup>·(x/2<sup>ν</sup>+1)/2<sup>α</sup> - 1) = ${params.beta}`);
-                const isNaturalBlock = (effectiveAnchorK === params.alpha + params.beta);
-                lines.push(`natural = (κ = α + β) = ${isNaturalBlock}`);
-                lines.push(''); // Blank line
-
-                // GROUP E: Affine Functions
-                lines.push(`x(B,t) = 2<sup>ν</sup>·(2<sup>α</sup>·(ρ + t·2<sup>κ-α+1</sup>) - 1) = ${x0}`);
-                const succ_x = (Math.pow(3, params.alpha) * params.rho - 1) / Math.pow(2, params.kappa - params.alpha) + 2 * Math.pow(3, params.alpha) * params.t;
-                let succ_x_display;
-                if (Number.isInteger(succ_x)) {
-                    succ_x_display = `<a href="#" class="succ-x-link" data-x="${succ_x}">${succ_x}</a>`;
+                // x and x→ first
+                if (displayX % 2 === 0) {
+                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1) = ${displayX}`);
                 } else {
-                    succ_x_display = succ_x.toFixed(2);
+                    lines.push(`x = 2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1 = ${displayX}`);
                 }
-                lines.push(`succ<sub>x</sub>(B,t) = (3<sup>α</sup>·ρ - 1)/2<sup>κ-α</sup> + 2·3<sup>α</sup>·t = ${succ_x_display}`);
+                const xSuccDisplay = `<a href="#" class="succ-x-link" data-x="${params.xSucc}">${params.xSucc}</a>`;
+                lines.push(`x<sup>→</sup> = (3<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1)/2<sup>β</sup> = ${xSuccDisplay}`);
+                lines.push('');
 
-                document.getElementById('anchorContent').innerHTML = lines.join('<br>');
+                // Block Parameters (derived from odd core)
+                if (displayX % 2 === 0) {
+                    lines.push(`ν = v₂(x) = ${nu}`);
+                }
+                lines.push(`α = v₂(x<sub>odd</sub> + 1) = ${params.alpha}`);
+                lines.push(`β = v₂(3<sup>α</sup>ρ - 1) = ${params.beta}`);
+                lines.push(`ρ = ${params.rho}`);
+                lines.push(`t = <input type="number" id="selectedBlockTSpinner" value="${params.t}" min="0" step="1" style="width: 60px;">`);
+                lines.push(`κ = α + β = ${params.kappa}`);
+
+                document.getElementById('selectedBlockContent').innerHTML = lines.join('<br>');
 
                 // Set up event handlers (wrap in setTimeout to ensure DOM is updated)
                 setTimeout(() => {
-                    const kappaSpinner = document.getElementById('anchorKappaSpinner');
-                    const tSpinner = document.getElementById('anchorTSpinner');
+                    const tSpinner = document.getElementById('selectedBlockTSpinner');
                     const succXLink = document.querySelector('.succ-x-link');
-
-                    if (kappaSpinner) {
-                        kappaSpinner.addEventListener('change', () => {
-                            const newKappa = parseInt(kappaSpinner.value);
-                            if (!isNaN(newKappa) && newKappa >= minKappa && newKappa <= maxKappa) {
-                                this.anchor_k = newKappa;
-                                this.updateURL(x0, this.anchor_k);
-                                this.updateAnchorSection();
-                            }
-                        });
-                    }
 
                     if (tSpinner) {
                         tSpinner.addEventListener('change', () => {
                             const newT = parseInt(tSpinner.value);
                             if (!isNaN(newT) && newT >= 0) {
-                                // Calculate new x from the affine function: x = 2^ν·(2^α·(ρ + t·2^(κ-α+1)) - 1)
-                                const newX = Math.pow(2, params.nu) * (Math.pow(2, params.alpha) * (params.rho + newT * Math.pow(2, effectiveAnchorK - params.alpha + 1)) - 1);
-                                this.loadSequenceForX(newX, effectiveAnchorK);
+                                // Calculate new x from the affine function: x = 2^α·(ρ + t·2^(β+1)) - 1
+                                const newX = Math.pow(2, params.alpha) * (params.rho + newT * params.modulus) - 1;
+                                this.loadSequenceForX(newX);  // Changes x0
                             }
                         });
                     }
 
-                    // Set up event handler for succ_x link
+                    // Set up event handler for x→ link - changes selectedX only
                     if (succXLink) {
                         succXLink.addEventListener('click', (e) => {
                             e.preventDefault();
                             const newX = parseInt(succXLink.dataset.x);
                             if (!isNaN(newX)) {
-                                // Navigate to succ_x without anchor_k (use natural block)
-                                this.loadSequenceForX(newX, null);
+                                this.setSelectedX(newX);  // Only changes selection, not x0
                             }
                         });
                     }
                 }, 0);
 
+                // Update block highlight on the lattice
+                // Find the selected x in the current sequence to get its o value
+                // The selected odd is at the RIGHT (high o) end of the block
+                // The block extends LEFT (lower o) by alpha steps
+                const selectedStep = this.currentSequence.steps.find(s => s.x === displayX);
+                if (selectedStep) {
+                    const maxO = selectedStep.o;  // Selected odd is at the right edge
+                    const minO = maxO - params.alpha;  // Block extends left by alpha
+                    this.renderer.selectedBlockRange = { minO, maxO };
+                } else {
+                    // Selected x is not in the current sequence - no highlight
+                    this.renderer.selectedBlockRange = null;
+                }
+                this.renderer.render();
+
                 // Update popout window if open
-                if (this.anchorBlockPopout && !this.anchorBlockPopout.closed) {
-                    this.anchorBlockPopout.postMessage({
-                        type: 'updateAnchorBlock',
-                        content: document.getElementById('anchorSection').innerHTML
+                if (this.selectedBlockPopout && !this.selectedBlockPopout.closed) {
+                    this.selectedBlockPopout.postMessage({
+                        type: 'updateSelectedBlock',
+                        content: document.getElementById('selectedBlockSection').innerHTML
                     }, '*');
                 }
             }
 
-            loadSequenceForX(x, anchor_k = null) {
+            loadSequenceForX(x) {
                 // Called when navigating to a different x value
-                this.anchor_k = !isNaN(anchor_k) && anchor_k !== null ? anchor_k : null;
+                // Resets selectedX since we're changing x0
+                this.selectedX = null;
                 document.getElementById('x0Input').value = x;
                 this.plotSequence();
             }
 
+            setSelectedX(x) {
+                // Set the selected block to display without changing x0
+                // x = null means follow x0, otherwise display block for x
+                this.selectedX = x;
+                this.updateSelectedBlockSection();
+            }
+
             clearCanvas() {
                 this.renderer.clear();
-                this.renderer.anchor_k = null;
+                this.renderer.selectedBlockRange = null;
                 this.heatmapRenderer.clear();
                 this.currentSequence = null;
-                this.anchor_k = null;
+                this.selectedX = null;
                 document.getElementById('oeSequence').textContent = '-';
-                document.getElementById('seqLength').textContent = '-';
                 document.getElementById('oeBlocks').textContent = '-';
                 document.getElementById('infoPanel').style.display = 'none';
-                document.getElementById('anchorSection').style.display = 'none';
+                document.getElementById('selectedBlockSection').style.display = 'none';
             }
 
             loadExample(x0) {
-                this.anchor_k = null;  // Clear anchor when loading example
+                this.selectedX = null;  // Reset selection when loading example
                 document.getElementById('x0Input').value = x0;
                 this.plotSequence();
             }
@@ -3224,62 +3082,54 @@
                 this.controlsPopout = win;
             }
 
-            popoutAnchorBlock() {
+            popoutSelectedBlock() {
                 // Check if already popped out
-                if (this.anchorBlockPopout && !this.anchorBlockPopout.closed) {
-                    this.anchorBlockPopout.focus();
+                if (this.selectedBlockPopout && !this.selectedBlockPopout.closed) {
+                    this.selectedBlockPopout.focus();
                     return;
                 }
 
-                const anchorSection = document.getElementById('anchorSection');
-                const anchorContent = document.getElementById('anchorContent');
-                if (!anchorContent || anchorContent.innerHTML.trim() === '') {
-                    alert('No anchor block to display. Plot a sequence first.');
+                const selectedBlockSection = document.getElementById('selectedBlockSection');
+                const selectedBlockContent = document.getElementById('selectedBlockContent');
+                if (!selectedBlockContent || selectedBlockContent.innerHTML.trim() === '') {
+                    alert('No selected block to display. Plot a sequence first.');
                     return;
                 }
 
-                const win = window.open('about:blank', 'AnchorBlock', 'popup=yes,width=600,height=800,left=300,top=150,resizable=yes,scrollbars=yes');
+                const win = window.open('about:blank', 'SelectedBlock', 'popup=yes,width=600,height=800,left=300,top=150,resizable=yes,scrollbars=yes');
                 if (!win) return;
 
-                // Hide the anchor section in main window
-                anchorSection.style.display = 'none';
+                // Hide the selected block section in main window
+                selectedBlockSection.style.display = 'none';
 
                 win.document.write(`
                     <!DOCTYPE html>
                     <html>
                     <head>
-                        <title>Anchor Block</title>
+                        <title>Selected Block</title>
                         <style>
                             body { margin: 0; padding: 20px; background: #0f0f0f; color: #e0e0e0; font-family: Arial, sans-serif; }
                             ${Array.from(document.styleSheets[0].cssRules).map(rule => rule.cssText).join('\n')}
                         </style>
                     </head>
                     <body>
-                        <div class="anchor-section" style="display: block;">
-                            ${anchorSection.innerHTML}
+                        <div class="selected-block-section" style="display: block;">
+                            ${selectedBlockSection.innerHTML}
                         </div>
                         <script>
                             // Listen for updates from parent
                             window.addEventListener('message', (event) => {
-                                if (event.data.type === 'updateAnchorBlock') {
-                                    document.querySelector('.anchor-section').innerHTML = event.data.content;
+                                if (event.data.type === 'updateSelectedBlock') {
+                                    document.querySelector('.selected-block-section').innerHTML = event.data.content;
 
-                                    // Re-attach event handlers for spinners and links
-                                    const kappaSpinner = document.getElementById('anchorKappaSpinner');
-                                    const tSpinner = document.getElementById('anchorTSpinner');
+                                    // Re-attach event handlers for spinner and links
+                                    const tSpinner = document.getElementById('selectedBlockTSpinner');
                                     const succXLink = document.querySelector('.succ-x-link');
-
-                                    if (kappaSpinner) {
-                                        kappaSpinner.addEventListener('change', () => {
-                                            window.opener.document.getElementById('anchorKappaSpinner').value = kappaSpinner.value;
-                                            window.opener.document.getElementById('anchorKappaSpinner').dispatchEvent(new Event('change'));
-                                        });
-                                    }
 
                                     if (tSpinner) {
                                         tSpinner.addEventListener('change', () => {
-                                            window.opener.document.getElementById('anchorTSpinner').value = tSpinner.value;
-                                            window.opener.document.getElementById('anchorTSpinner').dispatchEvent(new Event('change'));
+                                            window.opener.document.getElementById('selectedBlockTSpinner').value = tSpinner.value;
+                                            window.opener.document.getElementById('selectedBlockTSpinner').dispatchEvent(new Event('change'));
                                         });
                                     }
 
@@ -3293,7 +3143,7 @@
                             });
 
                             window.addEventListener('beforeunload', () => {
-                                window.opener.postMessage({ type: 'popoutClosed', name: 'anchorBlock' }, '*');
+                                window.opener.postMessage({ type: 'popoutClosed', name: 'selectedBlock' }, '*');
                             });
                         <\/script>
                     </body>
@@ -3302,7 +3152,7 @@
                 win.document.close();
 
                 // Store reference for updates
-                this.anchorBlockPopout = win;
+                this.selectedBlockPopout = win;
             }
 
             popoutLatticeParameters() {
@@ -3378,7 +3228,7 @@
         // Attach popout button event listeners
         document.getElementById('popoutLatticeBtn').addEventListener('click', () => app.popoutLattice());
         document.getElementById('popoutControlsBtn').addEventListener('click', () => app.popoutControls());
-        document.getElementById('popoutAnchorBtn').addEventListener('click', () => app.popoutAnchorBlock());
+        document.getElementById('popoutSelectedBlockBtn').addEventListener('click', () => app.popoutSelectedBlock());
         document.getElementById('popoutParamsBtn').addEventListener('click', () => app.popoutLatticeParameters());
 
         // Plot default example on load

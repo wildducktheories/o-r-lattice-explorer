@@ -2626,14 +2626,26 @@
                 // Compute ν for even x
                 const nu = blockSequence.v2(displayX);
 
-                // x and x→ first
+                // Compute numeric slopes and intercepts for affine equations
+                // x(t) = 2^α·(ρ + t·2^(β+1)) - 1 = m_x·t + c_x
+                // For even x: multiply by 2^ν
+                const m_x_odd = Math.pow(2, params.alpha + params.beta + 1);
+                const c_x_odd = Math.pow(2, params.alpha) * params.rho - 1;
+                const m_x = (displayX % 2 === 0) ? Math.pow(2, nu) * m_x_odd : m_x_odd;
+                const c_x = (displayX % 2 === 0) ? Math.pow(2, nu) * c_x_odd : c_x_odd;
+
+                // x→(t) = (3^α·ρ - 1)/2^β + 2·3^α·t = m_succ·t + c_succ
+                const m_succ = 2 * Math.pow(3, params.alpha);
+                const c_succ = params.xSucc - m_succ * params.t;  // Back-calculate intercept
+
+                // x and x→ with symbolic and numeric forms
                 if (displayX % 2 === 0) {
-                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1) = ${displayX}`);
+                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1) = ${m_x}t + ${c_x}`);
                 } else {
-                    lines.push(`x = 2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1 = ${displayX}`);
+                    lines.push(`x = 2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1 = ${m_x}t + ${c_x}`);
                 }
                 const xSuccDisplay = `<a href="#" class="succ-x-link" data-x="${params.xSucc}">${params.xSucc}</a>`;
-                lines.push(`x<sup>→</sup> = (3<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1)/2<sup>β</sup> = ${xSuccDisplay}`);
+                lines.push(`x<sup>→</sup> = (3<sup>α</sup>ρ - 1)/2<sup>β</sup> + 2·3<sup>α</sup>·t = ${m_succ}t + ${c_succ} = ${xSuccDisplay}`);
                 lines.push('');
 
                 // Block Parameters (derived from odd core)

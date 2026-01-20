@@ -347,14 +347,6 @@
             </div>
         </div>
 
-        <div class="canvas-container">
-            <h2 style="color: #4a9eff; margin-bottom: 15px;">Heatmap: (α, β) Distribution</h2>
-            <div style="color: #999; margin-bottom: 10px; font-size: 0.9em;">
-                For odd x: α = v₂(x+1), β = v₂(3x+1)
-            </div>
-            <canvas id="heatmapCanvas" width="800" height="600"></canvas>
-        </div>
-
     </div>
 
     <script>
@@ -2338,177 +2330,10 @@
             }
         }
 
-        // Heatmap renderer for (β, α) distribution
-        class HeatmapRenderer {
-            constructor(canvasId) {
-                this.canvas = document.getElementById(canvasId);
-                this.ctx = this.canvas.getContext('2d');
-                this.distribution = null;
-            }
-
-            clear() {
-                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-                this.distribution = null;
-            }
-
-            render(sequence) {
-                this.distribution = sequence.getAlphaBetaDistribution();
-                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-                if (this.distribution.length === 0) return;
-
-                // Find bounds
-                const betaValues = this.distribution.map(d => d.beta);
-                const alphaValues = this.distribution.map(d => d.alpha);
-                const counts = this.distribution.map(d => d.count);
-                const minBeta = Math.min(...betaValues);
-                const maxBeta = Math.max(...betaValues);
-                const minAlpha = Math.min(...alphaValues);
-                const maxAlpha = Math.max(...alphaValues);
-                const maxCount = Math.max(...counts);
-
-                // Add padding
-                const padding = 60;
-                const plotWidth = this.canvas.width - padding * 2;
-                const plotHeight = this.canvas.height - padding * 2;
-
-                // Calculate scale - α on x-axis, β on y-axis
-                const alphaRange = maxAlpha - minAlpha || 1;
-                const betaRange = maxBeta - minBeta || 1;
-                const scaleX = plotWidth / alphaRange;
-                const scaleY = plotHeight / betaRange;
-
-                // Helper function to convert α,β to screen coordinates
-                const toScreenX = (alpha) => padding + (alpha - minAlpha) * scaleX;
-                const toScreenY = (beta) => this.canvas.height - padding - (beta - minBeta) * scaleY;
-
-                // Draw axes
-                this.ctx.strokeStyle = '#666';
-                this.ctx.lineWidth = 2;
-                this.ctx.beginPath();
-                this.ctx.moveTo(padding, this.canvas.height - padding);
-                this.ctx.lineTo(this.canvas.width - padding, this.canvas.height - padding);
-                this.ctx.moveTo(padding, this.canvas.height - padding);
-                this.ctx.lineTo(padding, padding);
-                this.ctx.stroke();
-
-                // Draw axis labels
-                this.ctx.fillStyle = '#e0e0e0';
-                this.ctx.font = '16px sans-serif';
-                this.ctx.textAlign = 'center';
-                this.ctx.fillText('α = v₂(x+1)', this.canvas.width / 2, this.canvas.height - 10);
-                this.ctx.save();
-                this.ctx.translate(15, this.canvas.height / 2);
-                this.ctx.rotate(-Math.PI / 2);
-                this.ctx.fillText('β = v₂(x)', 0, 0);
-                this.ctx.restore();
-
-                // Draw grid lines and labels
-                this.ctx.strokeStyle = '#333';
-                this.ctx.lineWidth = 0.5;
-                this.ctx.font = '12px sans-serif';
-                this.ctx.textAlign = 'center';
-                this.ctx.fillStyle = '#999';
-
-                // α axis ticks (x-axis)
-                for (let alpha = minAlpha; alpha <= maxAlpha; alpha++) {
-                    const x = toScreenX(alpha);
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(x, padding);
-                    this.ctx.lineTo(x, this.canvas.height - padding);
-                    this.ctx.stroke();
-                    this.ctx.fillText(alpha.toString(), x, this.canvas.height - padding + 20);
-                }
-
-                // β axis ticks (y-axis)
-                this.ctx.textAlign = 'right';
-                for (let beta = minBeta; beta <= maxBeta; beta++) {
-                    const y = toScreenY(beta);
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(padding, y);
-                    this.ctx.lineTo(this.canvas.width - padding, y);
-                    this.ctx.stroke();
-                    this.ctx.fillText(beta.toString(), padding - 10, y + 4);
-                }
-
-                // Draw bubbles
-                for (const point of this.distribution) {
-                    const x = toScreenX(point.alpha);
-                    const y = toScreenY(point.beta);
-
-                    // Size proportional to count (like matplotlib s=count*20)
-                    const baseRadius = Math.sqrt(point.count * 20);
-                    const radius = Math.min(baseRadius, 50); // Cap maximum size
-
-                    // Color based on count (viridis-like colormap)
-                    const normalized = point.count / maxCount;
-                    const color = this.viridisColor(normalized);
-
-                    // Draw circle
-                    this.ctx.fillStyle = color;
-                    this.ctx.globalAlpha = 0.7;
-                    this.ctx.beginPath();
-                    this.ctx.arc(x, y, radius, 0, 2 * Math.PI);
-                    this.ctx.fill();
-
-                    // Draw border
-                    this.ctx.strokeStyle = '#000';
-                    this.ctx.lineWidth = 1;
-                    this.ctx.globalAlpha = 1.0;
-                    this.ctx.stroke();
-
-                    // Draw count label for larger bubbles
-                    if (radius > 10) {
-                        this.ctx.fillStyle = '#fff';
-                        this.ctx.font = 'bold 12px sans-serif';
-                        this.ctx.textAlign = 'center';
-                        this.ctx.textBaseline = 'middle';
-                        this.ctx.fillText(point.count.toString(), x, y);
-                    }
-                }
-
-                this.ctx.globalAlpha = 1.0;
-
-                // Draw title
-                this.ctx.fillStyle = '#e0e0e0';
-                this.ctx.font = 'bold 16px sans-serif';
-                this.ctx.textAlign = 'center';
-                this.ctx.fillText('(α, β) Distribution', this.canvas.width / 2, 25);
-            }
-
-            // Viridis-inspired colormap
-            viridisColor(t) {
-                // Simplified viridis: interpolate between purple, blue, green, yellow
-                t = Math.max(0, Math.min(1, t)); // Clamp to [0,1]
-
-                if (t < 0.25) {
-                    const s = t / 0.25;
-                    return this.rgbToHex(68 + s * (59 - 68), 1 + s * (82 - 1), 84 + s * (139 - 84));
-                } else if (t < 0.5) {
-                    const s = (t - 0.25) / 0.25;
-                    return this.rgbToHex(59 + s * (33 - 59), 82 + s * (145 - 82), 139 + s * (140 - 139));
-                } else if (t < 0.75) {
-                    const s = (t - 0.5) / 0.25;
-                    return this.rgbToHex(33 + s * (94 - 33), 145 + s * (201 - 145), 140 + s * (98 - 140));
-                } else {
-                    const s = (t - 0.75) / 0.25;
-                    return this.rgbToHex(94 + s * (253 - 94), 201 + s * (231 - 201), 98 + s * (37 - 98));
-                }
-            }
-
-            rgbToHex(r, g, b) {
-                r = Math.round(r);
-                g = Math.round(g);
-                b = Math.round(b);
-                return `rgb(${r}, ${g}, ${b})`;
-            }
-        }
-
         // Main application
         class Application {
             constructor() {
                 this.renderer = new LatticeRenderer('latticeCanvas');
-                this.heatmapRenderer = new HeatmapRenderer('heatmapCanvas');
                 this.currentSequence = null;
                 this.selectedX = null;  // The odd x whose block is displayed (null = use x0)
                 this.isInitialLoad = true;
@@ -2756,7 +2581,6 @@
                     this.renderer.clear();
                     this.renderer.addSequence(sequence);
                     this.updateCanvasPopout();
-                    this.heatmapRenderer.render(sequence);
                     this.updateInfo(sequence);
 
                     // Update URL to reflect current x value
@@ -2894,7 +2718,6 @@
             clearCanvas() {
                 this.renderer.clear();
                 this.renderer.selectedBlockRange = null;
-                this.heatmapRenderer.clear();
                 this.currentSequence = null;
                 this.selectedX = null;
                 document.getElementById('oeSequence').textContent = '-';

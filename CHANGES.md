@@ -2,13 +2,28 @@
 
 ## Summary
 
-Five major revisions have been made since commit c093445:
+Six major revisions have been made since commit c093445:
 
 1. **Swipe-to-Select Anchor Region** - Interactive selection on the lattice canvas
 2. **New Canonical Representation of x** - Fundamental change to how sequence elements are parameterized (5 parameters with γ)
 3. **Simplified 4-Parameter Framework** - Final simplification eliminating 3-adic parameters entirely
 4. **Modulus Correction** - Updated modulus from 2^β to 2^{β+1}
 5. **Selected Block with Visual Highlighting** - Block selection independent of x₀, with lattice highlighting
+6. **Remove Heatmap** - Removed (α, β) distribution heatmap
+
+---
+
+## 6. Remove Heatmap (January 2026)
+
+**Removed the (α, β) distribution heatmap visualization.**
+
+The heatmap showing the distribution of (α, β) pairs across the sequence has been removed to simplify the interface. The core O-R lattice visualization remains the primary view.
+
+### Removed
+
+- Heatmap canvas and container
+- HeatmapRenderer class
+- All heatmap rendering logic
 
 ---
 

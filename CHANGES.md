@@ -2,7 +2,7 @@
 
 ## Summary
 
-Six major revisions have been made since commit c093445:
+Ten major revisions have been made since commit c093445:
 
 1. **Swipe-to-Select Anchor Region** - Interactive selection on the lattice canvas
 2. **New Canonical Representation of x** - Fundamental change to how sequence elements are parameterized (5 parameters with γ)
@@ -10,6 +10,75 @@ Six major revisions have been made since commit c093445:
 4. **Modulus Correction** - Updated modulus from 2^β to 2^{β+1}
 5. **Selected Block with Visual Highlighting** - Block selection independent of x₀, with lattice highlighting
 6. **Remove Heatmap** - Removed (α, β) distribution heatmap
+7. **Affine Equation Display** - Numeric slope/intercept and x equation values
+8. **BigInt and Exact Arithmetic** - Rational class and full BigInt conversion
+9. **Multi-Block Selection with Composite Blocks** - Select ranges of natural blocks, display composite parameters
+10. **Trajectory Decomposition Paper** - New paper on block decomposition of Collatz trajectories
+
+---
+
+## 10. Trajectory Decomposition Paper (January 2026)
+
+**Added a new paper: "Block Decomposition of Collatz Trajectories".**
+
+The paper introduces composite blocks with parameters (α, β, ρ, φ, t) formed by composing adjacent natural blocks. It shows that the Collatz conjecture is equivalent to every odd x > 1 having a block decomposition with x→ = 1.
+
+### Key contributions
+
+- Extends the 3-parameter natural block framework from the affine-blocks paper with a 5-parameter composite block form
+- Defines block composition formulas for α, β, ρ, φ, t
+- Proves equivalence between block decomposition completeness and the Collatz conjecture
+- Provides a worked example for x = 7
+
+### Files
+
+- `papers/trajectory-decomposition.tex` — LaTeX source
+- `Taskfile.yml` — Added `pdf:trajectory-decomposition` build task
+
+---
+
+## 9. Multi-Block Selection with Composite Blocks (January 2026)
+
+**Swipe across multiple odd terms to select a range of consecutive natural blocks and display composite block parameters.**
+
+### Key Changes
+
+- **Range selection**: Swiping across multiple odd terms selects consecutive natural blocks between leftmost and rightmost odd values
+- **Composite block display**: Shows composite (α, β, ρ, φ, t) for the composed range
+- **Affine equations**: Displays symbolic and numeric forms for both x and x→ equations
+- **t-spinner**: Increments t on the composite block, preserving block structure across sequence changes
+- **URL persistence**: Selection state preserved via `succ` URL parameter
+- **Block composition**: `composeBlocksInRange()` follows the `decomposeBlock` chain to compose natural blocks correctly
+
+### Display
+
+- Symbolic equation: x = 2^α(ρ + t·2^(β+1)) - φ - 1
+- Numeric slope-intercept: x = mt + c
+- Equations shown in Selected Block, Composite Block, Lattice Parameters, and tooltip
+
+---
+
+## 8. BigInt and Exact Arithmetic (January 2026)
+
+**Converted the entire Collatz pipeline to BigInt with exact Rational arithmetic.**
+
+### Key Changes
+
+- **Rational class**: Exact rational arithmetic (add, multiply, compare, toString) for composite block parameters where ρ and φ are rational with 3-power denominators
+- **BigInt throughout**: All `step.x` values, block parameters, URL parsing, history state, congruence navigation use BigInt
+- **No floating-point arithmetic** in the Collatz pipeline — all computations are exact
+
+---
+
+## 7. Affine Equation Display (January 2026)
+
+**Added numeric slope and intercept values to affine equation display.**
+
+### Key Changes
+
+- Show numeric slope and intercept alongside symbolic forms in selected block panel
+- Add numeric x equation value display
+- Equations appear in selected block, composite block, and lattice parameters sections
 
 ---
 
@@ -60,7 +129,7 @@ The heatmap showing the distribution of (α, β) pairs across the sequence has b
 
 ## 4. Modulus Correction (January 2026)
 
-**Commit e7b8842**: Corrected the modulus in affine block formulas from 2^(κ-α) to 2^(κ-α+1).
+**Commit c00b350**: Corrected the modulus in affine block formulas from 2^(κ-α) to 2^(κ-α+1).
 
 ### Changes
 
@@ -289,9 +358,16 @@ This means:
 
 | Hash | Description |
 |------|-------------|
-| e7b8842 | Update modulus from 2^β to 2^{β+1} in UI and paper |
-| 972e681 | Refactor anchor block panel with interactive controls |
-| dc41248 | WIP: Add basic block parameter display to anchor section |
+| a7c921c | Add .ipynb_checkpoints to .gitignore |
+| 9527c1e | Add LaTeX build products to .gitignore |
+| 2e32b6e | Add trajectory decomposition paper |
+| fe0a2bb | Add multi-block selection with composite block composition |
+| 6afaf11 | Add block decomposition UI and convert Collatz pipeline to BigInt |
+| 9785001 | Add BigInt Rational class and convert arithmetic to exact precision |
+| ef298a8 | Add numeric value to x equation display |
+| 1371d99 | Show numeric slope and intercept in affine equations |
+| c00b350 | Update modulus from 2^β to 2^{β+1} in UI and paper |
+| a4ad829 | Refactor anchor block panel with interactive controls |
 | ebc554a | Document basic blocks vs natural blocks distinction |
 | 9f56103 | Update CHANGES.md with revised parameter formulas |
 | f621fa7 | Revise m, β, γ, ρ, t parameter formulas |

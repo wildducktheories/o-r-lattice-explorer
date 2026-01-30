@@ -4,27 +4,26 @@ Interactive web-based visualization tool for exploring Collatz sequences on the 
 
 ## Recent Updates
 
-### Selected Block with Visual Highlighting (January 2026)
+### Multi-Block Selection with Composite Blocks (January 2026)
 
-The block selection system allows interactive exploration of Steiner blocks within a sequence:
+Swipe across multiple odd terms to select a range of consecutive natural blocks. The composite block parameters (α, β, ρ, φ, t) are computed and displayed with full affine equations.
 
 **Block Selection:**
-- **Swipe-to-select**: Drag on the lattice to select the rightmost odd term inside the selection
-- **Visual highlighting**: Selected block region is highlighted with a blue band (±⅓ grid square margins)
-- **Independent selection**: Selecting a block does NOT change x₀—only the displayed block changes
-- **Successor navigation**: Click x→ to navigate to the next block in the chain
+- **Swipe-to-select**: Drag across one or more odd terms to select natural blocks
+- **Composite display**: Shows composite block parameters when multiple blocks are selected
+- **Affine equations**: Symbolic and numeric forms for x and x→
+- **t-spinner**: Preserves block structure when navigating affine families
+- **URL persistence**: Selection state preserved via `succ` parameter
 
-**Selected Block Panel:**
-- **x**: The selected odd value with its affine formula
-- **x→**: Clickable successor link (changes selection, not x₀)
-- **Block parameters**: α, β, ρ, t, κ (natural blocks only, κ = α + β)
-- **t spinner**: Changing t recalculates x₀ using the affine function
+**Exact Arithmetic:**
+- Full BigInt pipeline — no floating-point in Collatz computations
+- Rational class for exact ρ and φ in composite blocks
 
-**Lattice Parameters Panel:**
-- First descent term with congruence navigation
-- Unique analytical properties: λₓ, λₖ, d, k, θ analysis
+### Trajectory Decomposition Paper
 
-See `CHANGES.md` for detailed technical documentation and `papers/affine-block-structures.pdf` for mathematical details.
+New paper `papers/trajectory-decomposition.tex` shows that the Collatz conjecture is equivalent to every odd x > 1 having a complete block decomposition. Extends the affine-blocks framework with composite blocks and composition formulas.
+
+See `CHANGES.md` for detailed technical documentation and `papers/` for mathematical details.
 
 ## Overview
 
@@ -173,13 +172,14 @@ This coordinate system transforms the chaotic-appearing Collatz sequence into st
 
 ### Block Parameters
 
-The affine block structure uses:
-- **ν (nu)** = v₂(x): Leading even steps in E*(OE)+E+ pattern
-- **α (alpha)** = v₂(x/2^ν + 1): 2-adic valuation of odd core plus one
-- **ρ (rho)**: Odd residue parameter, ρ = (x/2^ν+1)/2^α mod 2^(κ-α+1)
-- **κ (kappa)**: Block length (number of even steps in the block)
+Natural blocks use 3 parameters (α, β, ρ) with scaling parameter t:
+- **α (alpha)** = v₂(x + 1): 2-adic valuation of x + 1
+- **β (beta)** = v₂(3^α·ρ̄ - 1): Even tail length
+- **ρ (rho)**: Odd residue parameter
 - **t**: Scaling parameter enumerating block instances
-- **β (beta)** = v₂(3^α·(x+1)/2^α - 1): Natural block indicator (κ_natural = α + β)
+- **κ (kappa)** = α + β: Total even steps in the block
+
+Composite blocks add **φ (phi)** ≥ 0 measuring deviation from natural block structure. For composites, ρ and φ are rational with 3-power denominators.
 
 ### Theta-Line Relationship
 

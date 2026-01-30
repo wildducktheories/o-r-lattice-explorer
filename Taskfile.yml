@@ -5,7 +5,6 @@ tasks:
     desc: Generate PDF from LaTeX papers
     deps:
       - pdf:current
-      - pdf:withdrawn
 
   pdf:current:
     desc: Generate PDF for current paper
@@ -17,18 +16,6 @@ tasks:
     cmds:
       - pdflatex -interaction=nonstopmode affine-block-structures.tex
       - pdflatex -interaction=nonstopmode affine-block-structures.tex
-    silent: false
-
-  pdf:withdrawn:
-    desc: Generate PDF for withdrawn paper
-    dir: papers
-    sources:
-      - affine-block-structures-withdrawn-2026-01.tex
-    generates:
-      - affine-block-structures-withdrawn-2026-01.pdf
-    cmds:
-      - pdflatex -interaction=nonstopmode affine-block-structures-withdrawn-2026-01.tex
-      - pdflatex -interaction=nonstopmode affine-block-structures-withdrawn-2026-01.tex
     silent: false
 
   clean:

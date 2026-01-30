@@ -375,6 +375,109 @@
             }
         };
 
+        // Exact rational arithmetic using native BigInt
+        class Rational {
+            constructor(num, den = 1n) {
+                if (typeof num === 'number') num = BigInt(num);
+                if (typeof den === 'number') den = BigInt(den);
+                if (den === 0n) throw new Error('Division by zero');
+                if (den < 0n) { num = -num; den = -den; }
+                const g = Rational.gcd(num < 0n ? -num : num, den);
+                this.num = num / g;
+                this.den = den / g;
+            }
+
+            static gcd(a, b) {
+                while (b !== 0n) { [a, b] = [b, a % b]; }
+                return a;
+            }
+
+            static fromInt(n) {
+                return new Rational(BigInt(n), 1n);
+            }
+
+            static pow2(n) {
+                return new Rational(1n << BigInt(n), 1n);
+            }
+
+            static pow3(n) {
+                return new Rational(3n ** BigInt(n), 1n);
+            }
+
+            add(other) {
+                return new Rational(
+                    this.num * other.den + other.num * this.den,
+                    this.den * other.den
+                );
+            }
+
+            sub(other) {
+                return new Rational(
+                    this.num * other.den - other.num * this.den,
+                    this.den * other.den
+                );
+            }
+
+            mul(other) {
+                return new Rational(this.num * other.num, this.den * other.den);
+            }
+
+            div(other) {
+                return new Rational(this.num * other.den, this.den * other.num);
+            }
+
+            neg() {
+                return new Rational(-this.num, this.den);
+            }
+
+            isInteger() {
+                return this.den === 1n;
+            }
+
+            toNumber() {
+                return Number(this.num) / Number(this.den);
+            }
+
+            toBigInt() {
+                if (!this.isInteger()) throw new Error(`Not an integer: ${this}`);
+                return this.num;
+            }
+
+            toString() {
+                if (this.den === 1n) return this.num.toString();
+                return `${this.num}/${this.den}`;
+            }
+
+            eq(other) { return this.num === other.num && this.den === other.den; }
+
+            cmp(other) {
+                const diff = this.num * other.den - other.num * this.den;
+                return diff < 0n ? -1 : diff > 0n ? 1 : 0;
+            }
+
+            lt(other) { return this.cmp(other) < 0; }
+            gt(other) { return this.cmp(other) > 0; }
+        }
+
+        Rational.ZERO = new Rational(0n);
+        Rational.ONE = new Rational(1n);
+
+        // BigInt 2-adic valuation
+        function v2b(n) {
+            if (n === 0n) return Infinity;
+            let count = 0;
+            while (n % 2n === 0n) { count++; n = n / 2n; }
+            return count;
+        }
+
+        // BigInt 3-adic valuation
+        function v3b(n) {
+            if (n === 0n) return Infinity;
+            let count = 0;
+            while (n % 3n === 0n) { count++; n = n / 3n; }
+            return count;
+        }
+
         // Collatz sequence computation with (o, e, r) tracking
         class CollatzSequence {
             constructor(x0) {
@@ -414,14 +517,16 @@
                     const currentX = tempSteps[i].x;
 
                     // Compute α = v₂(x+1)
-                    tempSteps[i].alpha = this.v2(currentX + 1);
+                    const xBig = BigInt(currentX);
+                    tempSteps[i].alpha = v2b(xBig + 1n);
 
-                    // Compute m = (x+1) / 2^α
-                    tempSteps[i].m = (currentX + 1) / Math.pow(2, tempSteps[i].alpha);
+                    // Compute m = (x+1) / 2^α (BigInt exact)
+                    const mBig = (xBig + 1n) / (1n << BigInt(tempSteps[i].alpha));
+                    tempSteps[i].m = Number(mBig);
 
                     // Compute β = v₂(3^α · m - 1)
-                    const threePowAlpha = Math.pow(3, tempSteps[i].alpha);
-                    tempSteps[i].beta = this.v2(threePowAlpha * tempSteps[i].m - 1);
+                    const threePowAlpha = 3n ** BigInt(tempSteps[i].alpha);
+                    tempSteps[i].beta = v2b(threePowAlpha * mBig - 1n);
 
                     // Compute lambda_x = log_2(x)
                     tempSteps[i].lambda_x = Math.log2(currentX);
@@ -451,38 +556,37 @@
                     }
 
                     // Compute d = 2^(2o-r) - 3^o (after o and r are set)
-                    tempSteps[i].d = Math.pow(2, 2 * tempSteps[i].o - tempSteps[i].r) - Math.pow(3, tempSteps[i].o);
+                    const oBig = BigInt(tempSteps[i].o);
+                    const twoPowE = 1n << BigInt(tempSteps[i].e);
+                    const threePowO = 3n ** oBig;
+                    tempSteps[i].d_big = (1n << BigInt(2 * tempSteps[i].o - tempSteps[i].r)) - threePowO;
+                    tempSteps[i].d = Number(tempSteps[i].d_big);
 
                     // Compute k = 2^e - 3^o * x (after o and e are set)
-                    tempSteps[i].k = Math.pow(2, tempSteps[i].e) - Math.pow(3, tempSteps[i].o) * currentX;
+                    tempSteps[i].k_big = twoPowE - threePowO * xBig;
+                    tempSteps[i].k = Number(tempSteps[i].k_big);
 
-                    // Compute lambda_k = log_2(k)
-                    tempSteps[i].lambda_k = Math.log2(Math.abs(tempSteps[i].k));
+                    // Compute lambda_k = log_2(|k|)
+                    const kAbs = tempSteps[i].k_big < 0n ? -tempSteps[i].k_big : tempSteps[i].k_big;
+                    tempSteps[i].lambda_k = kAbs > 0n ? Math.log2(Number(kAbs)) : 0;
 
                     // For even x, compute ν = v₂(x) and work with odd part
                     // For odd x, ν = 0
                     // Simplified: x+1 = 2^ν · 2^α · (ρ + t·2^(κ-α+1))
                     if (currentX % 2 === 0) {
-                        tempSteps[i].nu = this.v2(currentX);
-                        const xOdd = currentX / Math.pow(2, tempSteps[i].nu);
-                        // Compute parameters based on odd part
-                        const alphaOdd = this.v2(xOdd + 1);
-                        const mOdd = (xOdd + 1) / Math.pow(2, alphaOdd);
-                        const betaOdd = this.v2(Math.pow(3, alphaOdd) * mOdd - 1);
-                        const kappaOdd = alphaOdd + betaOdd;
-                        const modulusOdd = Math.pow(2, kappaOdd - alphaOdd + 1);
-                        // ρ = m mod 2^(κ-α+1)
-                        tempSteps[i].rho = mOdd % modulusOdd;
-                        // t = ⌊(m - ρ)/2^(κ-α+1)⌋
-                        tempSteps[i].t = Math.floor((mOdd - tempSteps[i].rho) / modulusOdd);
+                        tempSteps[i].nu = v2b(xBig);
+                        const xOddBig = xBig / (1n << BigInt(tempSteps[i].nu));
+                        const alphaOdd = v2b(xOddBig + 1n);
+                        const mOddBig = (xOddBig + 1n) / (1n << BigInt(alphaOdd));
+                        const betaOdd = v2b(3n ** BigInt(alphaOdd) * mOddBig - 1n);
+                        const modulusOdd = 1n << BigInt(betaOdd + 1);
+                        tempSteps[i].rho = Number(mOddBig % modulusOdd);
+                        tempSteps[i].t = Number((mOddBig - BigInt(tempSteps[i].rho)) / modulusOdd);
                     } else {
                         tempSteps[i].nu = 0;
-                        const kappa = tempSteps[i].alpha + tempSteps[i].beta;
-                        const modulus = Math.pow(2, kappa - tempSteps[i].alpha + 1);
-                        // ρ = m mod 2^(κ-α+1)
-                        tempSteps[i].rho = tempSteps[i].m % modulus;
-                        // t = ⌊(m - ρ)/2^(κ-α+1)⌋
-                        tempSteps[i].t = Math.floor((tempSteps[i].m - tempSteps[i].rho) / modulus);
+                        const modBig = 1n << BigInt(tempSteps[i].beta + 1);
+                        tempSteps[i].rho = Number(mBig % modBig);
+                        tempSteps[i].t = Number((mBig - BigInt(tempSteps[i].rho)) / modBig);
                     }
                 }
 
@@ -574,54 +678,42 @@
                 return bestCandidate;
             }
 
-            // Compute v_2(n) - the 2-adic valuation (power of 2 dividing n)
-            v2(n) {
-                if (n === 0) return Infinity;
-                let count = 0;
-                while (n % 2 === 0) {
-                    count++;
-                    n = n / 2;
-                }
-                return count;
-            }
-
-            // Compute v_3(n) - the 3-adic valuation (power of 3 dividing n)
-            v3(n) {
-                if (n === 0) return Infinity;
-                let count = 0;
-                while (n % 3 === 0) {
-                    count++;
-                    n = n / 3;
-                }
-                return count;
-            }
-
             // Compute block parameters for odd x (or odd core if x is even)
-            // Returns { alpha, rho, beta, kappa, t, x_odd, rhoBar }
+            // Returns { alpha, rho, beta, kappa, t, x_odd, rhoBar, xSucc, modulus }
+            // Uses BigInt internally for exact arithmetic
             computeBlockParams(x) {
                 // Step 1: Find odd value to analyze (odd core for even x)
-                const nu = this.v2(x);
-                const x_odd = (x % 2 === 0) ? x / Math.pow(2, nu) : x;
+                const xB = BigInt(x);
+                const nu = v2b(xB);
+                const x_odd = Number(xB / (1n << BigInt(nu)));
 
                 // Step 2: Compute alpha and rhoBar from x_odd + 1
-                // Identity: x = 2^α · ρ̄ - 1, where ρ̄ = ρ + t·2^(β+1)
-                const alpha = this.v2(x_odd + 1);
-                const rhoBar = Math.floor((x_odd + 1) / Math.pow(2, alpha));
+                const xOddB = BigInt(x_odd);
+                const alpha = v2b(xOddB + 1n);
+                const rhoBarB = (xOddB + 1n) / (1n << BigInt(alpha));
 
-                // Step 3: Compute beta = v₂(3^α·ρ - 1)
-                // Since v₂(3^α·ρ̄ - 1) = v₂(3^α·ρ - 1) for all t
-                const beta = this.v2(Math.pow(3, alpha) * rhoBar - 1);
+                // Step 3: Compute beta = v₂(3^α·ρ̄ - 1)
+                const threePowA = 3n ** BigInt(alpha);
+                const beta = v2b(threePowA * rhoBarB - 1n);
                 const kappa = alpha + beta;
 
                 // Step 4: Compute ρ and t
-                const modulus = Math.pow(2, beta + 1);
-                const rho = rhoBar % modulus;
-                const t = Math.floor((rhoBar - rho) / modulus);
+                const modulusB = 1n << BigInt(beta + 1);
+                const rhoB = rhoBarB % modulusB;
+                const tB = (rhoBarB - rhoB) / modulusB;
 
                 // Step 5: Compute x→ (successor - first odd of next Steiner circuit)
-                const xSucc = (Math.pow(3, alpha) * rhoBar - 1) / Math.pow(2, beta);
+                const xSuccB = (threePowA * rhoBarB - 1n) / (1n << BigInt(beta));
 
-                return { alpha, rho, beta, kappa, modulus, t, x_odd, rhoBar, xSucc };
+                return {
+                    alpha, beta, kappa,
+                    rho: Number(rhoB),
+                    t: Number(tB),
+                    modulus: Number(modulusB),
+                    x_odd,
+                    rhoBar: Number(rhoBarB),
+                    xSucc: Number(xSuccB)
+                };
             }
 
             getOEString() {
@@ -2168,16 +2260,20 @@
                 lines.push('--- Selected Block ---');
 
                 // Block Parameters (derived from odd core)
-                const nu = this.sequences[0].v2(step.x);
-                const x_odd = step.x % 2 === 0 ? step.x / Math.pow(2, nu) : step.x;
-                const alpha_odd = this.sequences[0].v2(x_odd + 1);
-                const rhoBar_odd = (x_odd + 1) / Math.pow(2, alpha_odd);
-                const beta_odd = this.sequences[0].v2(Math.pow(3, alpha_odd) * rhoBar_odd - 1);
+                const stepXB = BigInt(step.x);
+                const nu = v2b(stepXB);
+                const x_oddB = step.x % 2 === 0 ? stepXB / (1n << BigInt(nu)) : stepXB;
+                const x_odd = Number(x_oddB);
+                const alpha_odd = v2b(x_oddB + 1n);
+                const rhoBar_oddB = (x_oddB + 1n) / (1n << BigInt(alpha_odd));
+                const rhoBar_odd = Number(rhoBar_oddB);
+                const beta_odd = v2b(3n ** BigInt(alpha_odd) * rhoBar_oddB - 1n);
                 const kappa = alpha_odd + beta_odd;
-                const modulus = Math.pow(2, beta_odd + 1);
-                const rho_odd = rhoBar_odd % modulus;
-                const t_odd = Math.floor((rhoBar_odd - rho_odd) / modulus);
-                const xSucc = (Math.pow(3, alpha_odd) * rhoBar_odd - 1) / Math.pow(2, beta_odd);
+                const modulusB = 1n << BigInt(beta_odd + 1);
+                const modulus = Number(modulusB);
+                const rho_odd = Number(rhoBar_oddB % modulusB);
+                const t_odd = Number((rhoBar_oddB - BigInt(rho_odd)) / modulusB);
+                const xSucc = Number((3n ** BigInt(alpha_odd) * rhoBar_oddB - 1n) / (1n << BigInt(beta_odd)));
 
                 // x and x→ first
                 if (step.x % 2 === 0) {
@@ -2624,28 +2720,28 @@
                 const lines = [];
 
                 // Compute ν for even x
-                const nu = blockSequence.v2(displayX);
+                const nu = v2b(BigInt(displayX));
 
                 // Compute numeric slopes and intercepts for affine equations
                 // x(t) = 2^α·(ρ + t·2^(β+1)) - 1 = m_x·t + c_x
                 // For even x: multiply by 2^ν
-                const m_x_odd = Math.pow(2, params.alpha + params.beta + 1);
-                const c_x_odd = Math.pow(2, params.alpha) * params.rho - 1;
-                const m_x = (displayX % 2 === 0) ? Math.pow(2, nu) * m_x_odd : m_x_odd;
-                const c_x = (displayX % 2 === 0) ? Math.pow(2, nu) * c_x_odd : c_x_odd;
+                const m_x_odd_b = 1n << BigInt(params.alpha + params.beta + 1);
+                const c_x_odd_b = (1n << BigInt(params.alpha)) * BigInt(params.rho) - 1n;
+                const m_x_b = (displayX % 2 === 0) ? (1n << BigInt(nu)) * m_x_odd_b : m_x_odd_b;
+                const c_x_b = (displayX % 2 === 0) ? (1n << BigInt(nu)) * c_x_odd_b : c_x_odd_b;
 
                 // x→(t) = (3^α·ρ - 1)/2^β + 2·3^α·t = m_succ·t + c_succ
-                const m_succ = 2 * Math.pow(3, params.alpha);
-                const c_succ = params.xSucc - m_succ * params.t;  // Back-calculate intercept
+                const m_succ_b = 2n * 3n ** BigInt(params.alpha);
+                const c_succ_b = BigInt(params.xSucc) - m_succ_b * BigInt(params.t);
 
                 // x and x→ with symbolic and numeric forms
                 if (displayX % 2 === 0) {
-                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1) = ${m_x}t + ${c_x} = ${displayX}`);
+                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1) = ${m_x_b}t + ${c_x_b} = ${displayX}`);
                 } else {
-                    lines.push(`x = 2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1 = ${m_x}t + ${c_x} = ${displayX}`);
+                    lines.push(`x = 2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1 = ${m_x_b}t + ${c_x_b} = ${displayX}`);
                 }
                 const xSuccDisplay = `<a href="#" class="succ-x-link" data-x="${params.xSucc}">${params.xSucc}</a>`;
-                lines.push(`x<sup>→</sup> = (3<sup>α</sup>ρ - 1)/2<sup>β</sup> + 2·3<sup>α</sup>·t = ${m_succ}t + ${c_succ} = ${xSuccDisplay}`);
+                lines.push(`x<sup>→</sup> = (3<sup>α</sup>ρ - 1)/2<sup>β</sup> + 2·3<sup>α</sup>·t = ${m_succ_b}t + ${c_succ_b} = ${xSuccDisplay}`);
                 lines.push('');
 
                 // Block Parameters (derived from odd core)
@@ -2670,8 +2766,8 @@
                             const newT = parseInt(tSpinner.value);
                             if (!isNaN(newT) && newT >= 0) {
                                 // Calculate new x from the affine function: x = 2^α·(ρ + t·2^(β+1)) - 1
-                                const newX = Math.pow(2, params.alpha) * (params.rho + newT * params.modulus) - 1;
-                                this.loadSequenceForX(newX);  // Changes x0
+                                const newXB = (1n << BigInt(params.alpha)) * (BigInt(params.rho) + BigInt(newT) * BigInt(params.modulus)) - 1n;
+                                this.loadSequenceForX(Number(newXB));  // Changes x0
                             }
                         });
                     }

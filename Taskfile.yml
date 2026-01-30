@@ -5,6 +5,7 @@ tasks:
     desc: Generate PDF from LaTeX papers
     deps:
       - pdf:current
+      - pdf:trajectory-decomposition
 
   pdf:current:
     desc: Generate PDF for current paper
@@ -16,6 +17,18 @@ tasks:
     cmds:
       - pdflatex -interaction=nonstopmode affine-block-structures.tex
       - pdflatex -interaction=nonstopmode affine-block-structures.tex
+    silent: false
+
+  pdf:trajectory-decomposition:
+    desc: Generate PDF for trajectory decomposition paper
+    dir: papers
+    sources:
+      - trajectory-decomposition.tex
+    generates:
+      - trajectory-decomposition.pdf
+    cmds:
+      - pdflatex -interaction=nonstopmode trajectory-decomposition.tex
+      - pdflatex -interaction=nonstopmode trajectory-decomposition.tex
     silent: false
 
   clean:

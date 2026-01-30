@@ -1,0 +1,302 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath, amssymb, amsfonts, amsthm}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\geometry{margin=1in}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\title{Block Decomposition of Collatz Trajectories}
+\author{Jon Seymour}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We show that the Collatz conjecture is equivalent to the statement that every odd integer $x > 1$ can be described by a single block with parameters $(\alpha, \beta, \rho, \varphi, t)$. Given an odd $x$, we extract a natural block for the first Steiner circuit and recursively compose it with the block describing the successor's trajectory. The resulting composite block encodes the complete path from $x$ to $1$ in five parameters. The decomposition is unique and provides a canonical representation of Collatz trajectories as nested block compositions.
+\end{abstract}
+
+\section{Introduction}
+
+In previous work \cite{affine-blocks}, we introduced the affine block framework: every odd integer $x$ determines a \emph{natural block} $(\alpha, \beta, \rho)$ with scaling parameter $t$ describing the Steiner circuit from $x$ to the next odd value $x^\to$. The present paper extends that framework by defining \emph{composite blocks} with parameters $(\alpha, \beta, \rho, \varphi, t)$ where $\varphi > 0$, obtained by composing adjacent natural blocks.
+
+We make the following observation: if the Collatz trajectory of $x$ reaches $1$, then the entire trajectory can be encoded as a single composite block. Conversely, if every odd $x > 1$ admits such a block description, then every trajectory reaches $1$. This establishes an equivalence between the Collatz conjecture and the completeness of block decomposition.
+
+\section{Background}
+
+\subsection{Blocks}
+
+A \emph{block} $B = (\alpha, \beta, \rho, \varphi, t)$ describes a segment of a Collatz trajectory from an odd integer $x$ to an odd successor $x^\to$. The original framework \cite{affine-blocks} uses the 3-parameter form $(\alpha, \beta, \rho)$ with scaling parameter $t$ for natural blocks (where $\varphi = 0$). We extend this to a 5-parameter form that accommodates composite blocks. The parameters $\alpha \geq 1$, $\beta \geq 1$, $\rho$, $\varphi \geq 0$, and $t \geq 0$ determine $x$ and $x^\to$ via the affine equations:
+\begin{align}
+x &= 2^\alpha(\rho + t \cdot 2^{\beta+1}) - 1 - \varphi \label{eq:x} \\
+x^\to &= \frac{3^\alpha(\rho + t \cdot 2^{\beta+1}) - 1}{2^\beta} \label{eq:succ}
+\end{align}
+
+Every block satisfies the invariant $2^{\alpha+\beta} x^\to - 3^\alpha x = k$. We define the \emph{natural invariant} $\hat{k} = 3^\alpha - 2^\alpha$ (the value of $k$ when $\varphi = 0$) and the \emph{deviation} $\Delta k = k - \hat{k}$. The perturbation $\varphi$ is then:
+\begin{equation}\label{eq:phi-def}
+\varphi = \frac{\Delta k}{3^\alpha} = \frac{k - \hat{k}}{3^\alpha}
+\end{equation}
+
+Equivalently, $k = \hat{k} + \varphi \cdot 3^\alpha$. For natural blocks $\Delta k = 0$ and $\varphi = 0$; for composite blocks $\Delta k > 0$ and $\varphi > 0$.
+
+These equations hold uniformly for both natural and composite blocks.
+
+\subsection{Natural Blocks}
+
+A \emph{natural block} is a block with $\varphi = 0$. Every odd integer $x$ determines a unique natural block $B = (\alpha, \beta, \rho, 0, t)$ via:
+\begin{align}
+\alpha &= v_2(x + 1) \\
+\bar{\rho} &= (x + 1) / 2^\alpha \\
+\beta &= v_2(3^\alpha \bar{\rho} - 1) \\
+\rho &= \bar{\rho} \bmod 2^{\beta + 1} \\
+t &= \lfloor \bar{\rho} / 2^{\beta + 1} \rfloor
+\end{align}
+
+For natural blocks, $\rho$ is an odd integer and the affine equations \eqref{eq:x}--\eqref{eq:succ} reduce to $x = 2^\alpha(\rho + t \cdot 2^{\beta+1}) - 1$ and $x^\to = (3^\alpha(\rho + t \cdot 2^{\beta+1}) - 1)/2^\beta$.
+
+\subsection{Block Composition}
+
+Given two blocks $B_1 = (\alpha_1, \beta_1, \rho_1, \varphi_1, t_1)$ and $B_2 = (\alpha_2, \beta_2, \rho_2, \varphi_2, t_2)$ with $x_1^\to = x_2$, their composition $B_c = B_1 \circ B_2$ is a block satisfying $x_c = x_1$ and $x_c^\to = x_2^\to$ (see Appendix~\ref{app:boundary} for verification). The composite parameters are:
+\begin{align}
+\alpha_c &= \alpha_1 + \alpha_2 \label{eq:alpha-c} \\
+\beta_c &= \beta_1 + \beta_2 \label{eq:beta-c} \\
+k_c &= 3^{\alpha_2} k_1 + 2^{\alpha_1 + \beta_1} k_2 \label{eq:k-c}
+\end{align}
+
+The composite perturbation is:
+\begin{equation}\label{eq:phi-c}
+\varphi_c = \varphi_1 + \frac{2^{\alpha_1 + \beta_1}}{3^{\alpha_1}} \varphi_2 + \frac{(2^{\alpha_1 + \beta_1} - 2^{\alpha_1})(3^{\alpha_2} - 2^{\alpha_2})}{3^{\alpha_c}}
+\end{equation}
+
+The adjacency condition $x_1^\to = x_2$ constrains $t_1$ to a residue class modulo $2^{\alpha_2 + \beta_2}$. The canonical offset $\hat{t}_1 = t_1 \bmod 2^{\alpha_2 + \beta_2}$ determines the composite $\rho$:
+\begin{equation}\label{eq:rho-c}
+\rho_c = \frac{2^{\alpha_1}(\rho_1 + \hat{t}_1 \cdot 2^{\beta_1+1}) + \varphi_c - \varphi_1}{2^{\alpha_c}}
+\end{equation}
+
+The composite scaling parameter is $t_c = (t_1 - \hat{t}_1) / 2^{\alpha_2 + \beta_2}$.
+
+Since the composite is a block, it satisfies the same affine equations \eqref{eq:x}--\eqref{eq:succ} with its own parameters $(\alpha_c, \beta_c, \rho_c, \varphi_c, t_c)$. Composition of two or more natural blocks always yields $\varphi_c > 0$; for composite blocks, $\rho_c$ is generally rational with denominator a power of $3$.
+
+\section{Recursive Decomposition}
+
+\subsection{The Decomposition Algorithm}
+
+\begin{definition}[Block decomposition]
+For an odd integer $x > 1$, the \emph{block decomposition} $\mathcal{B}(x)$ is defined recursively:
+\begin{enumerate}
+\item Extract the natural block $B = (\alpha, \beta, \rho, 0, t)$ from $x$.
+\item Compute the successor $x^\to$ using \eqref{eq:succ}.
+\item If $x^\to = 1$, return $B$.
+\item Otherwise, return $B \circ \mathcal{B}(x^\to)$.
+\end{enumerate}
+\end{definition}
+
+\begin{remark}
+Step 4 composes $B$ with the block describing the remainder of the trajectory. Since $x^\to$ is odd (by construction of $\beta$), $\mathcal{B}(x^\to)$ is well-defined provided the recursion terminates. We address termination in Section~\ref{sec:equivalence}.
+\end{remark}
+
+\subsection{Properties of the Decomposition}
+
+When $\mathcal{B}(x)$ terminates, it produces a block $(\alpha_x, \beta_x, \rho_x, \varphi_x, t_x)$ with the following properties.
+
+\begin{proposition}[Boundary values]\label{prop:boundary}
+If $\mathcal{B}(x)$ terminates, the resulting block $B_x$ satisfies $x(B_x) = x$ and $x^\to(B_x) = 1$.
+\end{proposition}
+
+\begin{proof}
+By induction on the recursion depth. In the base case ($x^\to = 1$), the natural block $B$ has $x(B) = x$ and $x^\to(B) = 1$ by construction.
+
+For the inductive case, let $B$ be the natural block for $x$ with successor $x^\to > 1$, and suppose $\mathcal{B}(x^\to) = B'$ satisfies $x(B') = x^\to$ and $x^\to(B') = 1$. Then $B \circ B'$ satisfies $x(B \circ B') = x(B) = x$ and $x^\to(B \circ B') = x^\to(B') = 1$.
+\end{proof}
+
+\begin{proposition}[Accumulated parameters]\label{prop:accumulated}
+If $x$ reaches $1$ through $n$ Steiner circuits with natural blocks $B_1, B_2, \ldots, B_n$, then $\mathcal{B}(x)$ has:
+\begin{align}
+\alpha_x &= \sum_{i=1}^{n} \alpha_i \quad \text{(total odd steps)} \\
+\beta_x &= \sum_{i=1}^{n} \beta_i \quad \text{(total excess even steps)} \\
+\alpha_x + \beta_x &= \text{total even steps from $x$ to $1$}
+\end{align}
+\end{proposition}
+
+\begin{proof}
+Immediate from the additivity of $\alpha$ and $\beta$ under composition \eqref{eq:alpha-c}--\eqref{eq:beta-c}.
+\end{proof}
+
+\begin{proposition}[Uniqueness]\label{prop:unique}
+The block decomposition $\mathcal{B}(x)$ is unique: the parameters $(\alpha_x, \beta_x, \rho_x, \varphi_x, t_x)$ are uniquely determined by $x$.
+\end{proposition}
+
+\begin{proof}
+Each step of the recursion is deterministic: the natural block extraction from an odd $x$ is unique (the parameters $\alpha, \beta, \rho, t$ are computed by formulas), and the successor $x^\to$ is uniquely determined. The composition formulas \eqref{eq:alpha-c}--\eqref{eq:phi-c} then determine the composite parameters uniquely. Since the recursion builds the composition in a fixed right-recursive order $B_1 \circ (B_2 \circ (\cdots \circ B_n))$, the result is unique.
+\end{proof}
+
+\section{Structure of the Block Parameters}
+
+The decomposition reveals how the five parameters encode trajectory information.
+
+\subsection{The Parameters $\alpha$ and $\beta$}
+
+The total $\alpha$ counts the number of odd steps in the entire trajectory, and $\alpha + \beta$ counts the total even steps. These satisfy:
+\begin{equation}
+2^{\alpha + \beta} \cdot 1 = 3^\alpha \cdot x + k
+\end{equation}
+
+giving:
+\begin{equation}\label{eq:trajectory-identity}
+2^{\alpha + \beta} = 3^\alpha x + k
+\end{equation}
+
+Since $x^\to = 1$, the block invariant yields $k$ directly.
+
+\subsection{The Parameter $\rho$}
+
+For a natural block, $\rho$ is an odd integer. For a composite block arising from decomposition, $\rho$ is generally rational with denominator a power of $3$:
+\begin{equation}
+\rho = \frac{p}{3^m}
+\end{equation}
+for some integers $p$ and $m \leq \alpha$. This follows from the composition formula for $\rho_c$, which introduces factors of $3^{-\alpha_1}$ through the $\varphi$ terms.
+
+\subsection{The Perturbation $\varphi$}
+
+For trajectories of length $n > 1$ (more than one Steiner circuit), $\varphi > 0$. The perturbation satisfies:
+\begin{equation}
+\varphi = \frac{k - (3^\alpha - 2^\alpha)}{3^\alpha} = \frac{\Delta k}{3^\alpha}
+\end{equation}
+
+where $\Delta k = k - \hat{k}$ measures the deviation from natural block structure. For a trajectory through $n$ circuits, $\Delta k$ accumulates contributions from each composition step.
+
+\subsection{The Parameter $t$}
+
+The scaling parameter $t$ determines where $x$ sits within its affine family. Two odd integers sharing the same trajectory structure (same sequence of $(\alpha_i, \beta_i, \rho_i)$ values) differ only in $t$.
+
+\section{Equivalence with the Collatz Conjecture}\label{sec:equivalence}
+
+\begin{theorem}[Equivalence]\label{thm:equiv}
+The following are equivalent:
+\begin{enumerate}
+\item[(C)] Every Collatz trajectory starting from a positive integer reaches $1$.
+\item[(B)] Every odd integer $x > 1$ has a block decomposition $\mathcal{B}(x) = (\alpha, \beta, \rho, \varphi, t)$ with $x^\to = 1$.
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+$(C) \Rightarrow (B)$: If the trajectory of $x$ reaches $1$, it passes through finitely many odd values $x = x_1, x_2, \ldots, x_n$ with $x_n^\to = 1$. Each $x_i$ determines a natural block $B_i$, and the recursion in $\mathcal{B}$ terminates after $n$ steps, producing $B_1 \circ B_2 \circ \cdots \circ B_n$.
+
+$(B) \Rightarrow (C)$: If $\mathcal{B}(x)$ exists with $x^\to = 1$, then by Proposition~\ref{prop:boundary}, the composite block maps $x$ to $1$. Since the composite encodes a valid sequence of Collatz operations (each natural block corresponds to a Steiner circuit), the trajectory from $x$ reaches $1$. Every even positive integer $2^k m$ with $m$ odd reaches $m$ by repeated halving, so all positive integers reach $1$.
+\end{proof}
+
+\section{Example: $x = 7$}
+
+The trajectory of $7$ is: $7 \to 11 \to 17 \to 13 \to 5 \to 1$.
+
+\textbf{Step 1}: $x = 7$. Natural block: $\alpha = 3$, $\bar{\rho} = 1$, $\beta = v_2(3^3 \cdot 1 - 1) = v_2(26) = 1$, $\rho = 1$, $t = 0$. Successor: $x^\to = (27 - 1)/2 = 13$.
+
+Wait---let us verify. $7 \to 22 \to 11$: that is one odd step ($\alpha = 1$?). Let us recompute.
+
+$x = 7$: $\alpha = v_2(8) = 3$, $\bar{\rho} = 8/8 = 1$.
+
+The Steiner circuit from $7$: $7 \to 22 \to 11 \to 34 \to 17 \to 52 \to 26 \to 13$. That is $\alpha = 3$ odd steps and $\beta = v_2(3^3 \cdot 1 - 1) = v_2(26) = 1$ extra even step. So $x^\to = 26/2 = 13$. Confirmed.
+
+\textbf{Step 2}: $x = 13$. $\alpha = v_2(14) = 1$, $\bar{\rho} = 7$, $\beta = v_2(3 \cdot 7 - 1) = v_2(20) = 2$, $\rho = 7 \bmod 8 = 7$, $t = 0$. Successor: $x^\to = (21 - 1)/4 = 5$.
+
+\textbf{Step 3}: $x = 5$. $\alpha = v_2(6) = 1$, $\bar{\rho} = 3$, $\beta = v_2(3 \cdot 3 - 1) = v_2(8) = 3$, $\rho = 3 \bmod 16 = 3$, $t = 0$. Successor: $x^\to = (9 - 1)/8 = 1$. Terminate.
+
+The three natural blocks are:
+\begin{align*}
+B_1 &= (3, 1, 1, 0, 0) & x &= 7, \; x^\to = 13 \\
+B_2 &= (1, 2, 7, 0, 0) & x &= 13, \; x^\to = 5 \\
+B_3 &= (1, 3, 3, 0, 0) & x &= 5, \; x^\to = 1
+\end{align*}
+
+Composing $B_2 \circ B_3$: $\alpha = 2$, $\beta = 5$, and using the composition formulas yields a composite block mapping $13 \to 1$.
+
+Composing $B_1 \circ (B_2 \circ B_3)$: $\alpha = 5$, $\beta = 6$, giving a single block $\mathcal{B}(7)$ with $\alpha + \beta = 11$ total even steps mapping $7 \to 1$.
+
+Verification: $2^{11} = 2048$ and $3^5 \cdot 7 + k = 1701 + k$. So $k = 2048 - 1701 = 347$, and $\hat{k} = 3^5 - 2^5 = 243 - 32 = 211$, giving $\Delta k = 136$ and $\varphi = 136/243$.
+
+\section{Discussion}
+
+The block decomposition provides a canonical five-parameter encoding of Collatz trajectories. The equivalence with the Collatz conjecture (Theorem~\ref{thm:equiv}) reframes the conjecture as: \emph{every odd $x > 1$ admits a block $(\alpha, \beta, \rho, \varphi, t)$ with $x^\to = 1$}.
+
+This perspective shifts attention from the dynamics of the Collatz map to the existence of block parameters. The question becomes: for a given $x$, do there exist $(\alpha, \beta)$ such that:
+\begin{enumerate}
+\item $2^{\alpha+\beta} - 3^\alpha x = k$ has a solution with $k$ achievable by some composition of natural blocks,
+\item the resulting $\rho$ and $\varphi$ are consistent with the composition formulas.
+\end{enumerate}
+
+The first condition is a Diophantine constraint on $(\alpha, \beta)$ given $x$. The second condition links the algebraic structure of $k$ (as a weighted sum over the trajectory's natural blocks) to the geometric structure of $\rho$.
+
+\appendix
+
+\section{Composition Preserves Boundary Values}\label{app:boundary}
+
+We verify that the composition formulas from Section~2.3 satisfy $x_c = x_1$ and $x_c^\to = x_2^\to$.
+
+\begin{proposition}\label{prop:xc-equals-x1}
+If $B_c = B_1 \circ B_2$, then $x(B_c) = x(B_1)$.
+\end{proposition}
+
+\begin{proof}
+Write $\bar{\rho}_i = \rho_i + t_i \cdot 2^{\beta_i + 1}$ for $i = 1, 2, c$. We need to show:
+\[
+2^{\alpha_c} \bar{\rho}_c - 1 - \varphi_c = 2^{\alpha_1} \bar{\rho}_1 - 1 - \varphi_1
+\]
+i.e., that $2^{\alpha_c} \bar{\rho}_c = 2^{\alpha_1} \bar{\rho}_1 + \varphi_c - \varphi_1$.
+
+From \eqref{eq:rho-c}, $\rho_c = (2^{\alpha_1}(\rho_1 + \hat{t}_1 \cdot 2^{\beta_1+1}) + \varphi_c - \varphi_1) / 2^{\alpha_c}$, and $t_c = (t_1 - \hat{t}_1) / 2^{\alpha_2 + \beta_2}$. Therefore:
+\begin{align*}
+2^{\alpha_c} \bar{\rho}_c
+&= 2^{\alpha_c} \rho_c + 2^{\alpha_c} \cdot t_c \cdot 2^{\beta_c + 1} \\
+&= 2^{\alpha_1}(\rho_1 + \hat{t}_1 \cdot 2^{\beta_1+1}) + \varphi_c - \varphi_1 + \frac{(t_1 - \hat{t}_1) \cdot 2^{\alpha_c + \beta_c + 1}}{2^{\alpha_2 + \beta_2}} \\
+&= 2^{\alpha_1}(\rho_1 + \hat{t}_1 \cdot 2^{\beta_1+1}) + \varphi_c - \varphi_1 + (t_1 - \hat{t}_1) \cdot 2^{\alpha_1 + \beta_1 + 1}
+\end{align*}
+where the last step uses $\alpha_c + \beta_c = \alpha_1 + \alpha_2 + \beta_1 + \beta_2$. Combining the $\hat{t}_1$ terms:
+\begin{align*}
+&= 2^{\alpha_1} \rho_1 + \hat{t}_1 \cdot 2^{\alpha_1 + \beta_1 + 1} + \varphi_c - \varphi_1 + t_1 \cdot 2^{\alpha_1+\beta_1+1} - \hat{t}_1 \cdot 2^{\alpha_1+\beta_1+1} \\
+&= 2^{\alpha_1} \rho_1 + t_1 \cdot 2^{\alpha_1 + \beta_1 + 1} + \varphi_c - \varphi_1 \\
+&= 2^{\alpha_1} \bar{\rho}_1 + \varphi_c - \varphi_1
+\end{align*}
+Substituting into the $x$-equation \eqref{eq:x}:
+\[
+x_c = 2^{\alpha_c} \bar{\rho}_c - 1 - \varphi_c = 2^{\alpha_1} \bar{\rho}_1 + \varphi_c - \varphi_1 - 1 - \varphi_c = 2^{\alpha_1} \bar{\rho}_1 - 1 - \varphi_1 = x_1. \qedhere
+\]
+\end{proof}
+
+\begin{proposition}\label{prop:succc-equals-succ2}
+If $B_c = B_1 \circ B_2$ and $x_1^\to = x_2$, then $x_c^\to = x_2^\to$.
+\end{proposition}
+
+\begin{proof}
+Each block satisfies the invariant $2^{\alpha+\beta} x^\to - 3^\alpha x = k$, so $x^\to = (3^\alpha x + k) / 2^{\alpha+\beta}$. Applying this to block~2 with the adjacency condition $x_2 = x_1^\to$:
+\[
+x_2^\to = \frac{3^{\alpha_2} x_1^\to + k_2}{2^{\alpha_2 + \beta_2}}
+= \frac{3^{\alpha_2} \cdot \frac{3^{\alpha_1} x_1 + k_1}{2^{\alpha_1+\beta_1}} + k_2}{2^{\alpha_2+\beta_2}}
+= \frac{3^{\alpha_c} x_1 + 3^{\alpha_2} k_1 + 2^{\alpha_1+\beta_1} k_2}{2^{\alpha_c + \beta_c}}
+\]
+By \eqref{eq:k-c}, the numerator is $3^{\alpha_c} x_1 + k_c$. Since $x_c = x_1$ (Proposition~\ref{prop:xc-equals-x1}), the composite invariant gives:
+\[
+x_c^\to = \frac{3^{\alpha_c} x_c + k_c}{2^{\alpha_c+\beta_c}} = \frac{3^{\alpha_c} x_1 + k_c}{2^{\alpha_c+\beta_c}} = x_2^\to. \qedhere
+\]
+\end{proof}
+
+\begin{thebibliography}{9}
+\bibitem{affine-blocks}
+Jon Seymour,
+\textit{Affine Block Structure in Collatz Sequences},
+2025.
+
+\end{thebibliography}
+
+\end{document}

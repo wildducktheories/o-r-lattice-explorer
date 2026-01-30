@@ -347,6 +347,13 @@
             </div>
         </div>
 
+        <div id="compositeBlockPanel" class="info-panel" style="display: none;">
+            <div class="info-section">
+                <div class="info-label">Composite Block</div>
+                <div class="info-value" id="compositeBlockContent"></div>
+            </div>
+        </div>
+
     </div>
 
     <script>
@@ -478,30 +485,160 @@
             return count;
         }
 
+        // Block decomposition: represents a block with parameters (α, β, ρ, φ, t)
+        // where ρ and φ are Rational for exact arithmetic.
+        class Block {
+            constructor(alpha, beta, rho, phi, t) {
+                this.alpha = alpha;     // Number: odd step count
+                this.beta = beta;       // Number: excess even step count
+                this.rho = rho;         // Rational: residue parameter
+                this.phi = phi;         // Rational: perturbation (0 for natural)
+                this.t = t;             // Number: scaling parameter
+            }
+
+            // x = 2^α(ρ + t·2^(β+1)) - φ - 1
+            x() {
+                return Rational.pow2(this.alpha)
+                    .mul(this.rho.add(Rational.fromInt(this.t).mul(Rational.pow2(this.beta + 1))))
+                    .sub(this.phi)
+                    .sub(Rational.ONE);
+            }
+
+            // x→ = (3^α·ρ - 1)/2^β + 2·3^α·t
+            succ() {
+                const threeA = Rational.pow3(this.alpha);
+                return threeA.mul(this.rho).sub(Rational.ONE)
+                    .div(Rational.pow2(this.beta))
+                    .add(new Rational(2n).mul(threeA).mul(Rational.fromInt(this.t)));
+            }
+
+            // k = 2^(α+β)·x→ - 3^α·x
+            k() {
+                return Rational.pow2(this.alpha + this.beta).mul(this.succ())
+                    .sub(Rational.pow3(this.alpha).mul(this.x()));
+            }
+
+            isNatural() { return this.phi.eq(Rational.ZERO); }
+        }
+
+        class NaturalBlock extends Block {
+            constructor(alpha, beta, rho, t) {
+                super(alpha, beta, Rational.fromInt(rho), Rational.ZERO, t);
+            }
+            isNatural() { return true; }
+        }
+
+        class CompositeBlock extends Block {
+            constructor(head, tail) {
+                const alphaC = head.alpha + tail.alpha;
+                const betaC = head.beta + tail.beta;
+
+                // φ_c = φ_1 + (2^(α₁+β₁)/3^α₁)·φ₂ + (2^(α₁+β₁) - 2^α₁)(3^α₂ - 2^α₂)/3^α_c
+                const pow2ab1 = Rational.pow2(head.alpha + head.beta);
+                const phiC = head.phi
+                    .add(pow2ab1.div(Rational.pow3(head.alpha)).mul(tail.phi))
+                    .add(pow2ab1.sub(Rational.pow2(head.alpha))
+                        .mul(Rational.pow3(tail.alpha).sub(Rational.pow2(tail.alpha)))
+                        .div(Rational.pow3(alphaC)));
+
+                // t̂₁ = t₁ mod 2^(α₂+β₂)
+                const tailModB = 1n << BigInt(tail.alpha + tail.beta);
+                const headTB = BigInt(head.t);
+                const t1HatB = ((headTB % tailModB) + tailModB) % tailModB;
+                const tC = Number((headTB - t1HatB) / tailModB);
+                const t1Hat = Number(t1HatB);
+
+                // ρ_c = (2^α₁·(ρ₁ + t̂₁·2^(β₁+1)) + φ_c - φ₁) / 2^α_c
+                const rhoC = Rational.pow2(head.alpha)
+                    .mul(head.rho.add(Rational.fromInt(t1Hat).mul(Rational.pow2(head.beta + 1))))
+                    .add(phiC)
+                    .sub(head.phi)
+                    .div(Rational.pow2(alphaC));
+
+                super(alphaC, betaC, rhoC, phiC, tC);
+                this.head = head;
+                this.tail = tail;
+            }
+        }
+
+        // Decompose odd x into a block (α, β, ρ, φ, t) encoding its trajectory to 1.
+        // Returns a NaturalBlock if x→ = 1, otherwise a CompositeBlock.
+        function decomposeBlock(x) {
+            const xB = typeof x === 'bigint' ? x : BigInt(x);
+            const alpha = v2b(xB + 1n);
+            const rhoBarB = (xB + 1n) / (1n << BigInt(alpha));
+            const beta = v2b(3n ** BigInt(alpha) * rhoBarB - 1n);
+            const modulusB = 1n << BigInt(beta + 1);
+            const rhoB = rhoBarB % modulusB;
+            const tB = (rhoBarB - rhoB) / modulusB;
+            const xSuccB = (3n ** BigInt(alpha) * rhoBarB - 1n) / (1n << BigInt(beta));
+
+            const rho = Number(rhoB);
+            const t = Number(tB);
+
+            if (xSuccB === 1n) {
+                return new NaturalBlock(alpha, beta, rho, t);
+            }
+            return new CompositeBlock(
+                new NaturalBlock(alpha, beta, rho, t),
+                decomposeBlock(xSuccB)
+            );
+        }
+
+        // Build the decomposition table: each row is the cumulative composite
+        // from that level down to 1, plus the natural block at that level.
+        // Returns array of { natural: NaturalBlock, composite: Block }
+        function decompositionTable(x) {
+            const rows = [];
+            let block = decomposeBlock(x);
+            while (true) {
+                if (block instanceof CompositeBlock) {
+                    rows.push({ natural: block.head, composite: block });
+                    block = block.tail;
+                } else {
+                    // Final natural block (x→ = 1)
+                    rows.push({ natural: block, composite: block });
+                    break;
+                }
+            }
+            return rows;
+        }
+
         // Collatz sequence computation with (o, e, r) tracking
         class CollatzSequence {
             constructor(x0) {
-                this.x0 = x0;
+                this.x0 = BigInt(x0);
                 this.steps = [];
                 this.sortedByL = null;  // Sorted index for descent term search
+                this._decomposition = null;  // Lazy block decomposition cache
                 this.compute();
                 this.buildLIndex();  // Build L-index after computing sequence
             }
 
+            // Lazy accessor: block decomposition table for x0
+            // Returns array of { natural: NaturalBlock, composite: Block }
+            get decomposition() {
+                if (!this._decomposition && this.x0 > 1n && this.x0 % 2n === 1n) {
+                    this._decomposition = decompositionTable(this.x0);
+                }
+                return this._decomposition;
+            }
+
             compute() {
                 // First, compute the sequence forward to get x values and types
+                // x values are BigInt throughout for exact arithmetic
                 let x = this.x0;
                 let tempSteps = [{ x: x, type: 'start' }];
 
                 let iterations = 0;
-                while (x !== 1 && iterations < CONFIG.maxIterations) {
-                    if (x % 2 === 1) {
+                while (x !== 1n && iterations < CONFIG.maxIterations) {
+                    if (x % 2n === 1n) {
                         // Odd step: 3x+1
-                        x = 3 * x + 1;
+                        x = 3n * x + 1n;
                         tempSteps.push({ x: x, type: 'O' });
                     } else {
                         // Even step: x/2
-                        x = x / 2;
+                        x = x / 2n;
                         tempSteps.push({ x: x, type: 'E' });
                     }
                     iterations++;
@@ -517,11 +654,11 @@
                     const currentX = tempSteps[i].x;
 
                     // Compute α = v₂(x+1)
-                    const xBig = BigInt(currentX);
-                    tempSteps[i].alpha = v2b(xBig + 1n);
+                    // currentX is already BigInt
+                    tempSteps[i].alpha = v2b(currentX + 1n);
 
                     // Compute m = (x+1) / 2^α (BigInt exact)
-                    const mBig = (xBig + 1n) / (1n << BigInt(tempSteps[i].alpha));
+                    const mBig = (currentX + 1n) / (1n << BigInt(tempSteps[i].alpha));
                     tempSteps[i].m = Number(mBig);
 
                     // Compute β = v₂(3^α · m - 1)
@@ -529,7 +666,7 @@
                     tempSteps[i].beta = v2b(threePowAlpha * mBig - 1n);
 
                     // Compute lambda_x = log_2(x)
-                    tempSteps[i].lambda_x = Math.log2(currentX);
+                    tempSteps[i].lambda_x = Math.log2(Number(currentX));
 
                     if (i === tempSteps.length - 1) {
                         // At x=1: o=0, e=0
@@ -543,7 +680,7 @@
 
                         // If current x is odd, o = successor.o + 1, e = successor.e
                         // If current x is even, o = successor.o, e = successor.e + 1
-                        if (currentX % 2 === 1) {
+                        if (currentX % 2n === 1n) {
                             tempSteps[i].o = successor.o + 1;
                             tempSteps[i].e = successor.e;
                         } else {
@@ -563,7 +700,7 @@
                     tempSteps[i].d = Number(tempSteps[i].d_big);
 
                     // Compute k = 2^e - 3^o * x (after o and e are set)
-                    tempSteps[i].k_big = twoPowE - threePowO * xBig;
+                    tempSteps[i].k_big = twoPowE - threePowO * currentX;
                     tempSteps[i].k = Number(tempSteps[i].k_big);
 
                     // Compute lambda_k = log_2(|k|)
@@ -573,9 +710,9 @@
                     // For even x, compute ν = v₂(x) and work with odd part
                     // For odd x, ν = 0
                     // Simplified: x+1 = 2^ν · 2^α · (ρ + t·2^(κ-α+1))
-                    if (currentX % 2 === 0) {
-                        tempSteps[i].nu = v2b(xBig);
-                        const xOddBig = xBig / (1n << BigInt(tempSteps[i].nu));
+                    if (currentX % 2n === 0n) {
+                        tempSteps[i].nu = v2b(currentX);
+                        const xOddBig = currentX / (1n << BigInt(tempSteps[i].nu));
                         const alphaOdd = v2b(xOddBig + 1n);
                         const mOddBig = (xOddBig + 1n) / (1n << BigInt(alphaOdd));
                         const betaOdd = v2b(3n ** BigInt(alphaOdd) * mOddBig - 1n);
@@ -782,7 +919,7 @@
 
                 for (const step of this.steps) {
                     // Only include odd x values (matching Python: if s.x%2==1)
-                    if (step.x % 2 === 1) {
+                    if (step.x % 2n === 1n) {
                         const key = `${step.beta},${step.alpha}`;
                         counts.set(key, (counts.get(key) || 0) + 1);
                     }
@@ -839,12 +976,13 @@
 
             getCongruences(x, k) {
                 // Get congruence values x±2^k
-                const power = Math.pow(2, k);
-                const prev = x - power;
-                const next = x + power;
+                const xB = BigInt(x);
+                const power = 1n << BigInt(k);
+                const prev = xB - power;
+                const next = xB + power;
                 return {
-                    prev: prev > 0 ? prev : null,
-                    current: x,
+                    prev: prev > 0n ? prev : null,
+                    current: xB,
                     next: next,
                     k: k
                 };
@@ -1256,7 +1394,7 @@
                     // Line 2: Red-orange - corresponds to (o,r)-estimator on o-r lattice
                     // O-R lattice: r = θ*o + c2, where c2 = -log₂(x)
                     // Log₂(x) graph: y = -c2 = log₂(x) = cₓ
-                    const c_x = Math.log2(highlightStep.x);
+                    const c_x = Math.log2(Number(highlightStep.x));
                     ctx.strokeStyle = 'rgba(255, 69, 0, 0.6)';  // Match red-orange theta line
                     ctx.lineWidth = 1.5;
                     ctx.setLineDash([3, 3]);
@@ -1403,9 +1541,9 @@
 
                 for (const seq of sequences) {
                     for (const step of seq.steps) {
-                        if (step.x % 2 === 1) {
+                        if (step.x % 2n === 1n) {
                             const c_or = theta * step.o - step.r;
-                            const c_x = Math.log2(step.x);
+                            const c_x = Math.log2(Number(step.x));
                             const epsilon = (c_or - c_x) / normFactor;
 
                             minEpsilon = Math.min(minEpsilon, epsilon);
@@ -1429,9 +1567,9 @@
                         const isDescentTerm = latticeTransform.descentTerm && step.n === latticeTransform.descentTerm.n;
 
                         // Show odd x values OR descent term (even if even)
-                        if (step.x % 2 === 1 || isDescentTerm) {
+                        if (step.x % 2n === 1n || isDescentTerm) {
                             const c_or = theta * step.o - step.r;
-                            const c_x = Math.log2(step.x);
+                            const c_x = Math.log2(Number(step.x));
                             const epsilon = (c_or - c_x) / normFactor;
 
                             const x = latticeTransform.toScreenX(step.o);
@@ -1793,7 +1931,7 @@
                 let bestO = -Infinity;
 
                 for (const step of sequence.steps) {
-                    if (step.x % 2 !== 1) continue;  // Only consider odd terms
+                    if (step.x % 2n !== 1n) continue;  // Only consider odd terms
 
                     const screenX = this.toScreenX(step.o);
 
@@ -1871,7 +2009,7 @@
                     // Show odd x, start, last even in each (OE)+ sequence, and descent term (always visible)
                     const lastEvenIndices = new Set(sequence.getLastEvenInOEPlusIndices());
                     return sequence.steps.filter((s, idx) =>
-                        s.x % 2 === 1 ||
+                        s.x % 2n === 1n ||
                         s.type === 'start' ||
                         lastEvenIndices.has(idx) ||
                         (this.descentTerm && s.n === this.descentTerm.n)  // Always show descent term
@@ -2170,7 +2308,7 @@
 
                 // Line 2: (o,r)-estimator - passes through (0, -log_2(x_ref))
                 // Given x, estimates where (o,r) should fall
-                const c2 = -Math.log2(refStep.x);
+                const c2 = -Math.log2(Number(refStep.x));
                 const r2_start = theta * minO + c2;
                 const r2_end = theta * maxO + c2;
 
@@ -2260,9 +2398,9 @@
                 lines.push('--- Selected Block ---');
 
                 // Block Parameters (derived from odd core)
-                const stepXB = BigInt(step.x);
+                const stepXB = step.x;
                 const nu = v2b(stepXB);
-                const x_oddB = step.x % 2 === 0 ? stepXB / (1n << BigInt(nu)) : stepXB;
+                const x_oddB = step.x % 2n === 0n ? stepXB / (1n << BigInt(nu)) : stepXB;
                 const x_odd = Number(x_oddB);
                 const alpha_odd = v2b(x_oddB + 1n);
                 const rhoBar_oddB = (x_oddB + 1n) / (1n << BigInt(alpha_odd));
@@ -2276,7 +2414,7 @@
                 const xSucc = Number((3n ** BigInt(alpha_odd) * rhoBar_oddB - 1n) / (1n << BigInt(beta_odd)));
 
                 // x and x→ first
-                if (step.x % 2 === 0) {
+                if (step.x % 2n === 0n) {
                     lines.push(`x = 2^ν·(2^α(ρ + t·2^(β+1)) - 1) = ${step.x}`);
                 } else {
                     lines.push(`x = 2^α(ρ + t·2^(β+1)) - 1 = ${step.x}`);
@@ -2285,7 +2423,7 @@
                 lines.push('');
 
                 // Block parameters
-                if (step.x % 2 === 0) {
+                if (step.x % 2n === 0n) {
                     lines.push(`ν=${nu}, α=${alpha_odd}, β=${beta_odd}, ρ=${rho_odd}, t=${t_odd}`);
                 } else {
                     lines.push(`α=${alpha_odd}, β=${beta_odd}, ρ=${rho_odd}, t=${t_odd}`);
@@ -2315,14 +2453,14 @@
                 lines.push('');
 
                 // Unique derived parameters
-                lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
-                lines.push(`k = 2^e - 3^o·x = ${step.k}`);
+                lines.push(`d = 2^(2o-r) - 3^o = ${step.d_big}`);
+                lines.push(`k = 2^e - 3^o·x = ${step.k_big}`);
                 lines.push('');
 
                 // Theta-line intercepts and distances
                 const theta = 2 - Math.log2(3);
                 const c_or = theta * step.o - step.r;
-                const c_x = Math.log2(step.x);
+                const c_x = Math.log2(Number(step.x));
                 const normFactor = Math.sqrt(1 + theta * theta);
                 const L = c_or / normFactor;
                 const epsilon = (c_or - c_x) / normFactor;
@@ -2455,13 +2593,22 @@
                     // Get x from state or URL
                     let x;
                     if (e.state && e.state.x) {
-                        x = e.state.x;
+                        try {
+                            x = BigInt(e.state.x);
+                        } catch (err) {
+                            x = 27n;
+                        }
                     } else {
                         const urlParams = new URLSearchParams(window.location.search);
-                        x = parseInt(urlParams.get('x')) || 27;
+                        const xParam = urlParams.get('x');
+                        try {
+                            x = xParam ? BigInt(xParam) : 27n;
+                        } catch (err) {
+                            x = 27n;
+                        }
                     }
 
-                    document.getElementById('x0Input').value = x;
+                    document.getElementById('x0Input').value = x.toString();
                     // Don't update history when handling popstate
                     this.isInitialLoad = true;
                     this.plotSequence();
@@ -2509,9 +2656,13 @@
                 const xParam = urlParams.get('x');
 
                 if (xParam) {
-                    const x = parseInt(xParam);
-                    if (!isNaN(x) && x > 0) {
-                        document.getElementById('x0Input').value = x;
+                    try {
+                        const x = BigInt(xParam);
+                        if (x > 0n) {
+                            document.getElementById('x0Input').value = x.toString();
+                        }
+                    } catch (e) {
+                        // ignore invalid x parameter
                     }
                 }
             }
@@ -2525,10 +2676,11 @@
 
                         // Parse x from URL
                         const url = new URL(href, window.location.origin);
-                        const x = parseInt(url.searchParams.get('x'));
-
-                        if (!isNaN(x)) {
+                        try {
+                            const x = BigInt(url.searchParams.get('x'));
                             this.loadSequenceForX(x);
+                        } catch (e) {
+                            // ignore invalid values
                         }
                     }
                 });
@@ -2540,7 +2692,7 @@
                 url.searchParams.set('x', x);
                 url.searchParams.delete('anchor_k'); // Clean up legacy parameter
 
-                const state = { x: x };
+                const state = { x: x.toString() };
 
                 if (this.isInitialLoad) {
                     // Replace state on initial load to avoid creating extra history entry
@@ -2566,6 +2718,9 @@
                 // Update x₀ info panel
                 this.updateX0Info(sequence);
 
+                // Update composite block panel
+                this.updateCompositeBlockInfo(sequence);
+
                 // Verify invariants
                 this.verifyInvariants(sequence);
             }
@@ -2574,7 +2729,7 @@
                 const step = sequence.steps[0]; // x₀
                 const theta = 2 - Math.log2(3);
                 const c_or = theta * step.o - step.r;
-                const c_x = Math.log2(step.x);
+                const c_x = Math.log2(Number(step.x));
                 const normFactor = Math.sqrt(1 + theta * theta);
                 const L = c_or / normFactor;
                 const epsilon = (c_or - c_x) / normFactor;
@@ -2612,8 +2767,8 @@
                 lines.push(''); // Blank line
 
                 // Unique derived parameters
-                lines.push(`d = 2^(2o-r) - 3^o = ${step.d}`);
-                lines.push(`k = 2^e - 3^o·x = ${step.k}`);
+                lines.push(`d = 2^(2o-r) - 3^o = ${step.d_big}`);
+                lines.push(`k = 2^e - 3^o·x = ${step.k_big}`);
                 lines.push(''); // Blank line
 
                 // Theta-line intercepts and distances
@@ -2634,6 +2789,62 @@
                         content: document.getElementById('infoPanel').innerHTML
                     }, '*');
                 }
+            }
+
+            updateCompositeBlockInfo(sequence) {
+                const panel = document.getElementById('compositeBlockPanel');
+                const content = document.getElementById('compositeBlockContent');
+
+                // Only show for odd x₀ > 1
+                if (sequence.x0 <= 1n || sequence.x0 % 2n === 0n) {
+                    panel.style.display = 'none';
+                    return;
+                }
+
+                const decomp = sequence.decomposition;
+                if (!decomp || decomp.length === 0) {
+                    panel.style.display = 'none';
+                    return;
+                }
+
+                const block = decomp[0].composite;
+                const lines = [];
+
+                lines.push(`α = ${block.alpha}`);
+                lines.push(`β = ${block.beta}`);
+                lines.push(`ρ = ${block.rho}`);
+                lines.push(`φ = ${block.phi}`);
+                lines.push(`t = <input type="number" id="compositeBlockTSpinner" value="${block.t}" min="0" step="1" style="width: 60px;">`);
+                lines.push('');
+
+                // x and x→ from the composite block
+                lines.push(`x = ${block.x()}`);
+                lines.push(`x<sup>→</sup> = ${block.succ()}`);
+
+                content.innerHTML = lines.join('<br>');
+                panel.style.display = 'block';
+
+                // Attach t-spinner handler
+                setTimeout(() => {
+                    const tSpinner = document.getElementById('compositeBlockTSpinner');
+                    if (tSpinner) {
+                        tSpinner.addEventListener('change', () => {
+                            const newT = parseInt(tSpinner.value);
+                            if (!isNaN(newT) && newT >= 0) {
+                                // Recompute x from composite block affine equation:
+                                // x = 2^α(ρ + t·2^(β+1)) - φ - 1
+                                const tRat = Rational.fromInt(newT);
+                                const newX = Rational.pow2(block.alpha)
+                                    .mul(block.rho.add(tRat.mul(Rational.pow2(block.beta + 1))))
+                                    .sub(block.phi)
+                                    .sub(Rational.ONE);
+                                if (newX.isInteger()) {
+                                    this.loadSequenceForX(newX.toBigInt());
+                                }
+                            }
+                        });
+                    }
+                }, 0);
             }
 
             verifyInvariants(sequence) {
@@ -2666,8 +2877,13 @@
 
             plotSequence() {
                 try {
-                    const x0 = parseInt(document.getElementById('x0Input').value);
-                    if (isNaN(x0) || x0 < 1) {
+                    let x0;
+                    try {
+                        x0 = BigInt(document.getElementById('x0Input').value);
+                    } catch (e) {
+                        x0 = -1n;
+                    }
+                    if (x0 < 1n) {
                         this.showError('Please enter a valid positive integer');
                         return;
                     }
@@ -2727,15 +2943,15 @@
                 // For even x: multiply by 2^ν
                 const m_x_odd_b = 1n << BigInt(params.alpha + params.beta + 1);
                 const c_x_odd_b = (1n << BigInt(params.alpha)) * BigInt(params.rho) - 1n;
-                const m_x_b = (displayX % 2 === 0) ? (1n << BigInt(nu)) * m_x_odd_b : m_x_odd_b;
-                const c_x_b = (displayX % 2 === 0) ? (1n << BigInt(nu)) * c_x_odd_b : c_x_odd_b;
+                const m_x_b = (displayX % 2n === 0n) ? (1n << BigInt(nu)) * m_x_odd_b : m_x_odd_b;
+                const c_x_b = (displayX % 2n === 0n) ? (1n << BigInt(nu)) * c_x_odd_b : c_x_odd_b;
 
                 // x→(t) = (3^α·ρ - 1)/2^β + 2·3^α·t = m_succ·t + c_succ
                 const m_succ_b = 2n * 3n ** BigInt(params.alpha);
                 const c_succ_b = BigInt(params.xSucc) - m_succ_b * BigInt(params.t);
 
                 // x and x→ with symbolic and numeric forms
-                if (displayX % 2 === 0) {
+                if (displayX % 2n === 0n) {
                     lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1) = ${m_x_b}t + ${c_x_b} = ${displayX}`);
                 } else {
                     lines.push(`x = 2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1 = ${m_x_b}t + ${c_x_b} = ${displayX}`);
@@ -2745,7 +2961,7 @@
                 lines.push('');
 
                 // Block Parameters (derived from odd core)
-                if (displayX % 2 === 0) {
+                if (displayX % 2n === 0n) {
                     lines.push(`ν = v₂(x) = ${nu}`);
                 }
                 lines.push(`α = v₂(x<sub>odd</sub> + 1) = ${params.alpha}`);
@@ -2767,7 +2983,7 @@
                             if (!isNaN(newT) && newT >= 0) {
                                 // Calculate new x from the affine function: x = 2^α·(ρ + t·2^(β+1)) - 1
                                 const newXB = (1n << BigInt(params.alpha)) * (BigInt(params.rho) + BigInt(newT) * BigInt(params.modulus)) - 1n;
-                                this.loadSequenceForX(Number(newXB));  // Changes x0
+                                this.loadSequenceForX(newXB);
                             }
                         });
                     }
@@ -2776,10 +2992,10 @@
                     if (succXLink) {
                         succXLink.addEventListener('click', (e) => {
                             e.preventDefault();
-                            const newX = parseInt(succXLink.dataset.x);
-                            if (!isNaN(newX)) {
-                                this.setSelectedX(newX);  // Only changes selection, not x0
-                            }
+                            try {
+                                const newX = BigInt(succXLink.dataset.x);
+                                this.setSelectedX(newX);
+                            } catch (e) { /* ignore invalid */ }
                         });
                     }
                 }, 0);
@@ -2788,7 +3004,8 @@
                 // Find the selected x in the current sequence to get its o value
                 // The selected odd is at the RIGHT (high o) end of the block
                 // The block extends LEFT (lower o) by alpha steps
-                const selectedStep = this.currentSequence.steps.find(s => s.x === displayX);
+                const displayXBig = BigInt(displayX);
+                const selectedStep = this.currentSequence.steps.find(s => s.x === displayXBig);
                 if (selectedStep) {
                     const maxO = selectedStep.o;  // Selected odd is at the right edge
                     const minO = maxO - params.alpha;  // Block extends left by alpha
@@ -2810,9 +3027,9 @@
 
             loadSequenceForX(x) {
                 // Called when navigating to a different x value
-                // Resets selectedX since we're changing x0
+                // x can be Number or BigInt
                 this.selectedX = null;
-                document.getElementById('x0Input').value = x;
+                document.getElementById('x0Input').value = x.toString();
                 this.plotSequence();
             }
 

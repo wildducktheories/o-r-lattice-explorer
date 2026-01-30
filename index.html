@@ -307,7 +307,7 @@
             <div class="control-row">
                 <label for="x0Input">Starting value (x₀):</label>
                 <input type="number" id="x0Input" value="27" min="1" step="1">
-                <button onclick="app.selectedX = null; app.plotSequence()">Plot Sequence</button>
+                <button onclick="app.selectedRange = null; app.plotSequence()">Plot Sequence</button>
                 <button onclick="app.clearCanvas()">Clear</button>
             </div>
             <div class="control-row">
@@ -602,6 +602,29 @@
                 }
             }
             return rows;
+        }
+
+        // Compose natural blocks from x down to (but not including) succX.
+        // Follows the decomposition chain: each call to decomposeBlock gives a
+        // natural block head whose successor is the next x in the chain.
+        function composeBlocksInRange(x, succX) {
+            const xB = typeof x === 'bigint' ? x : BigInt(x);
+            const succXB = typeof succX === 'bigint' ? succX : BigInt(succX);
+            const naturals = [];
+            let current = xB;
+            while (current !== succXB && current > 1n) {
+                const block = decomposeBlock(current);
+                const head = (block instanceof CompositeBlock) ? block.head : block;
+                naturals.push(head);
+                current = head.succ().toBigInt();
+            }
+            if (naturals.length === 0) return null;
+            if (naturals.length === 1) return naturals[0];
+            let result = naturals[naturals.length - 1];
+            for (let i = naturals.length - 2; i >= 0; i--) {
+                result = new CompositeBlock(naturals[i], result);
+            }
+            return result;
         }
 
         // Collatz sequence computation with (o, e, r) tracking
@@ -1923,30 +1946,37 @@
 
                 const sequence = this.sequences[0];
                 const { x, width } = this.selectionRect;
-                const rightEdge = x + width;
+                // Inset edges by half a grid unit to avoid picking up adjacent points
+                const halfGrid = this.transform.scale * 0.5;
+                const leftEdge = x + halfGrid;
+                const rightEdge = x + width - halfGrid;
 
-                // Find the rightmost odd term whose screen position is INSIDE the selection
-                // (i.e., screenX <= rightEdge)
-                let bestOdd = null;
-                let bestO = -Infinity;
+                // Find all odd terms inside the selection, track leftmost and rightmost by o
+                let leftOdd = null, rightOdd = null;
+                let minO = Infinity, maxO = -Infinity;
 
                 for (const step of sequence.steps) {
-                    if (step.x % 2n !== 1n) continue;  // Only consider odd terms
+                    if (step.x % 2n !== 1n) continue;
 
                     const screenX = this.toScreenX(step.o);
 
-                    // Must be inside the selection (at or before right edge)
-                    if (screenX <= rightEdge && step.o > bestO) {
-                        bestO = step.o;
-                        bestOdd = step.x;
+                    if (screenX >= leftEdge && screenX <= rightEdge) {
+                        if (step.o < minO) {
+                            minO = step.o;
+                            leftOdd = step.x;
+                        }
+                        if (step.o > maxO) {
+                            maxO = step.o;
+                            rightOdd = step.x;
+                        }
                     }
                 }
 
-                if (bestOdd === null) return;
+                if (rightOdd === null) return;
 
-                // Trigger callback to application
+                // Trigger callback with range
                 if (this.onSelectionComplete) {
-                    this.onSelectionComplete(bestOdd);
+                    this.onSelectionComplete(leftOdd, rightOdd);
                 }
             }
 
@@ -2439,6 +2469,15 @@
                 lines.push(`n = 3o - r = o + e = ${n_tooltip}`);
                 lines.push('');
 
+                // Natural block equation
+                if (step.x % 2n === 1n && step.x > 1n) {
+                    const params_tt = this.sequences[0].computeBlockParams(step.x);
+                    const m_x_tt = 1n << BigInt(params_tt.alpha + params_tt.beta + 1);
+                    const c_x_tt = (1n << BigInt(params_tt.alpha)) * BigInt(params_tt.rho) - 1n;
+                    lines.push(`x = 2^α(ρ + t·2^(β+1)) - 1 = ${m_x_tt}t + ${c_x_tt} = ${step.x}`);
+                    lines.push('');
+                }
+
                 // First descent term
                 if (this.descentTerm) {
                     lines.push(`x₍fd₎ = ${this.descentTerm.x}`);
@@ -2569,7 +2608,8 @@
             constructor() {
                 this.renderer = new LatticeRenderer('latticeCanvas');
                 this.currentSequence = null;
-                this.selectedX = null;  // The odd x whose block is displayed (null = use x0)
+                this.selectedRange = null;  // { leftX, rightX } range of odd x values (null = use x0)
+                this.selectionSucc = null;  // x→ of the composite block (for URL persistence)
                 this.isInitialLoad = true;
 
                 // Set up double-click handler
@@ -2583,36 +2623,40 @@
                 };
 
                 // Set up selection complete handler
-                // Swipe sets selectedX without changing x0
-                this.renderer.onSelectionComplete = (x) => {
-                    this.setSelectedX(x);
+                // Swipe sets selected range without changing x0
+                this.renderer.onSelectionComplete = (leftX, rightX) => {
+                    this.setSelectedRange(leftX, rightX);
                 };
 
                 // Handle browser back/forward buttons
                 window.addEventListener('popstate', (e) => {
-                    // Get x from state or URL
-                    let x;
+                    // Get x and succ from state or URL
+                    let x, succ = null;
+                    const urlParams = new URLSearchParams(window.location.search);
                     if (e.state && e.state.x) {
-                        try {
-                            x = BigInt(e.state.x);
-                        } catch (err) {
-                            x = 27n;
+                        try { x = BigInt(e.state.x); } catch (err) { x = 27n; }
+                        if (e.state.succ) {
+                            try { succ = BigInt(e.state.succ); } catch (err) {}
                         }
                     } else {
-                        const urlParams = new URLSearchParams(window.location.search);
                         const xParam = urlParams.get('x');
-                        try {
-                            x = xParam ? BigInt(xParam) : 27n;
-                        } catch (err) {
-                            x = 27n;
+                        try { x = xParam ? BigInt(xParam) : 27n; } catch (err) { x = 27n; }
+                        const succParam = urlParams.get('succ');
+                        if (succParam) {
+                            try { succ = BigInt(succParam); } catch (err) {}
                         }
                     }
 
                     document.getElementById('x0Input').value = x.toString();
-                    // Don't update history when handling popstate
                     this.isInitialLoad = true;
+                    this.selectedRange = null;
                     this.plotSequence();
                     this.isInitialLoad = false;
+
+                    // Restore selection from succ
+                    if (succ !== null) {
+                        this.restoreSelectionFromSucc(x, succ);
+                    }
                 });
 
                 // Set up congruence link navigation
@@ -2651,9 +2695,10 @@
             }
 
             loadFromURL() {
-                // Read x from query string
+                // Read x and succ from query string
                 const urlParams = new URLSearchParams(window.location.search);
                 const xParam = urlParams.get('x');
+                const succParam = urlParams.get('succ');
 
                 if (xParam) {
                     try {
@@ -2664,6 +2709,11 @@
                     } catch (e) {
                         // ignore invalid x parameter
                     }
+                }
+
+                // Defer selection restore until after plotSequence runs
+                if (succParam) {
+                    this._pendingSucc = succParam;
                 }
             }
 
@@ -2692,7 +2742,14 @@
                 url.searchParams.set('x', x);
                 url.searchParams.delete('anchor_k'); // Clean up legacy parameter
 
-                const state = { x: x.toString() };
+                // Persist selection as succ parameter (the successor of the composite block)
+                if (this.selectedRange) {
+                    url.searchParams.set('succ', this.selectionSucc || '');
+                } else {
+                    url.searchParams.delete('succ');
+                }
+
+                const state = { x: x.toString(), succ: this.selectionSucc || null };
 
                 if (this.isInitialLoad) {
                     // Replace state on initial load to avoid creating extra history entry
@@ -2743,6 +2800,15 @@
                 lines.push(`e = 2o - r = ${step.e}`);
                 lines.push(`n = 3o - r = o + e = ${n}`);
                 lines.push(''); // Blank line
+
+                // Natural block equation for x₀
+                if (step.x % 2n === 1n && step.x > 1n) {
+                    const params = sequence.computeBlockParams(step.x);
+                    const m_x_b = 1n << BigInt(params.alpha + params.beta + 1);
+                    const c_x_b = (1n << BigInt(params.alpha)) * BigInt(params.rho) - 1n;
+                    lines.push(`x = 2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1 = ${m_x_b}t + ${c_x_b} = ${step.x}`);
+                    lines.push(''); // Blank line
+                }
 
                 // First descent term
                 const descentTerm = sequence.findFirstDescentTerm(step);
@@ -2810,16 +2876,25 @@
                 const block = decomp[0].composite;
                 const lines = [];
 
+                // Affine equations with symbolic, slope-intercept, and numeric forms
+                const m_x = Rational.pow2(block.alpha + block.beta + 1);
+                const c_x = Rational.pow2(block.alpha).mul(block.rho)
+                    .sub(block.phi).sub(Rational.ONE);
+                const threeA = Rational.pow3(block.alpha);
+                const m_succ = new Rational(2n).mul(threeA);
+                const c_succ = threeA.mul(block.rho).sub(Rational.ONE)
+                    .div(Rational.pow2(block.beta));
+
+                lines.push(`x = 2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - φ - 1 = ${m_x}t + ${c_x} = ${block.x()}`);
+                lines.push(`x<sup>→</sup> = (3<sup>α</sup>ρ - 1)/2<sup>β</sup> + 2·3<sup>α</sup>·t = ${m_succ}t + ${c_succ} = ${block.succ()}`);
+                lines.push('');
+
                 lines.push(`α = ${block.alpha}`);
                 lines.push(`β = ${block.beta}`);
                 lines.push(`ρ = ${block.rho}`);
                 lines.push(`φ = ${block.phi}`);
                 lines.push(`t = <input type="number" id="compositeBlockTSpinner" value="${block.t}" min="0" step="1" style="width: 60px;">`);
-                lines.push('');
-
-                // x and x→ from the composite block
-                lines.push(`x = ${block.x()}`);
-                lines.push(`x<sup>→</sup> = ${block.succ()}`);
+                lines.push(`κ = α + β = ${block.alpha + block.beta}`);
 
                 content.innerHTML = lines.join('<br>');
                 panel.style.display = 'block';
@@ -2895,11 +2970,19 @@
                     this.updateCanvasPopout();
                     this.updateInfo(sequence);
 
-                    // Update URL to reflect current x value
-                    this.updateURL(x0);
+                    // Restore pending selection from URL succ parameter
+                    if (this._pendingSucc) {
+                        try {
+                            this.restoreSelectionFromSucc(x0, BigInt(this._pendingSucc));
+                        } catch (e) {}
+                        this._pendingSucc = null;
+                    }
 
                     // Update selected block section display
                     this.updateSelectedBlockSection();
+
+                    // Update URL (after selection is set, so succ is included)
+                    this.updateURL(x0);
 
                 } catch (error) {
                     this.showError(error.message);
@@ -2920,59 +3003,104 @@
                 section.style.display = 'block';
 
                 const x0 = this.currentSequence.steps[0].x;
-                // Use selectedX if set, otherwise use x0
-                const displayX = this.selectedX !== null ? this.selectedX : x0;
+                const range = this.selectedRange;
+                const steps = this.currentSequence.steps;
 
-                // Compute block parameters for the selected x
-                const params = this.currentSequence.computeBlockParams(displayX);
+                // Determine the start x and successor for the block range
+                let blockXBig, blockSuccBig;
+                let compositeBlock;
 
-                // Create sequence for displayX to get actual o, r, e values
-                const blockSequence = new CollatzSequence(displayX);
-                const prefix = blockSequence.getOEPrefixWithKEvens(params.kappa);
+                if (range !== null) {
+                    // Selection: compose blocks from rightX (highest o) down to leftX's successor
+                    const leftStep = steps.find(s => s.x === range.leftX);
+                    const rightStep = steps.find(s => s.x === range.rightX);
 
-                // Display pattern in its own section
+                    if (!leftStep || !rightStep) {
+                        this.renderer.selectedBlockRange = null;
+                        this.renderer.render();
+                        return;
+                    }
+
+                    // rightX has highest o = start of composite, leftX has lowest o
+                    // The successor is the decomposition successor of leftX's natural block
+                    blockXBig = range.rightX;
+                    const leftHead = decomposeBlock(range.leftX);
+                    const leftNat = (leftHead instanceof CompositeBlock) ? leftHead.head : leftHead;
+                    blockSuccBig = leftNat.succ().toBigInt();
+
+                    compositeBlock = composeBlocksInRange(blockXBig, blockSuccBig);
+                } else {
+                    // Default: full composite block for x₀ (all blocks down to 1)
+                    if (x0 % 2n === 0n || x0 <= 1n) {
+                        const firstOdd = steps.find(s => s.x % 2n === 1n);
+                        if (!firstOdd) {
+                            this.renderer.selectedBlockRange = null;
+                            this.renderer.render();
+                            return;
+                        }
+                        blockXBig = firstOdd.x;
+                        blockSuccBig = 1n;
+                        compositeBlock = composeBlocksInRange(blockXBig, 1n);
+                    } else {
+                        blockXBig = x0;
+                        blockSuccBig = 1n;
+                        const decomp = this.currentSequence.decomposition;
+                        compositeBlock = decomp ? decomp[0].composite : composeBlocksInRange(x0, 1n);
+                    }
+                }
+
+                if (!compositeBlock) {
+                    this.renderer.selectedBlockRange = null;
+                    this.renderer.render();
+                    return;
+                }
+
+                // Track successor for URL persistence
+                this.selectionSucc = range !== null ? blockSuccBig.toString() : null;
+
+                // Build OE pattern by walking the decomposition chain
+                let prefix = '';
+                let walkX = blockXBig;
+                while (walkX !== blockSuccBig && walkX > 1n) {
+                    const block = decomposeBlock(walkX);
+                    const head = (block instanceof CompositeBlock) ? block.head : block;
+                    const seq = new CollatzSequence(walkX);
+                    prefix += seq.getOEPrefixWithKEvens(head.alpha + head.beta);
+                    walkX = head.succ().toBigInt();
+                }
                 document.getElementById('selectedBlockPattern').textContent = prefix;
 
                 const lines = [];
 
-                // Compute ν for even x
-                const nu = v2b(BigInt(displayX));
-
-                // Compute numeric slopes and intercepts for affine equations
-                // x(t) = 2^α·(ρ + t·2^(β+1)) - 1 = m_x·t + c_x
-                // For even x: multiply by 2^ν
-                const m_x_odd_b = 1n << BigInt(params.alpha + params.beta + 1);
-                const c_x_odd_b = (1n << BigInt(params.alpha)) * BigInt(params.rho) - 1n;
-                const m_x_b = (displayX % 2n === 0n) ? (1n << BigInt(nu)) * m_x_odd_b : m_x_odd_b;
-                const c_x_b = (displayX % 2n === 0n) ? (1n << BigInt(nu)) * c_x_odd_b : c_x_odd_b;
-
+                // Compute affine slopes and intercepts
+                // x(t) = 2^α(ρ + t·2^(β+1)) - φ - 1 = m_x·t + c_x
+                const m_x = Rational.pow2(compositeBlock.alpha + compositeBlock.beta + 1);
+                const c_x = Rational.pow2(compositeBlock.alpha).mul(compositeBlock.rho)
+                    .sub(compositeBlock.phi).sub(Rational.ONE);
                 // x→(t) = (3^α·ρ - 1)/2^β + 2·3^α·t = m_succ·t + c_succ
-                const m_succ_b = 2n * 3n ** BigInt(params.alpha);
-                const c_succ_b = BigInt(params.xSucc) - m_succ_b * BigInt(params.t);
+                const threeA = Rational.pow3(compositeBlock.alpha);
+                const m_succ = new Rational(2n).mul(threeA);
+                const c_succ = threeA.mul(compositeBlock.rho).sub(Rational.ONE)
+                    .div(Rational.pow2(compositeBlock.beta));
 
                 // x and x→ with symbolic and numeric forms
-                if (displayX % 2n === 0n) {
-                    lines.push(`x = 2<sup>ν</sup>·(2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1) = ${m_x_b}t + ${c_x_b} = ${displayX}`);
-                } else {
-                    lines.push(`x = 2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - 1 = ${m_x_b}t + ${c_x_b} = ${displayX}`);
-                }
-                const xSuccDisplay = `<a href="#" class="succ-x-link" data-x="${params.xSucc}">${params.xSucc}</a>`;
-                lines.push(`x<sup>→</sup> = (3<sup>α</sup>ρ - 1)/2<sup>β</sup> + 2·3<sup>α</sup>·t = ${m_succ_b}t + ${c_succ_b} = ${xSuccDisplay}`);
+                lines.push(`x = 2<sup>α</sup>(ρ + t·2<sup>β+1</sup>) - φ - 1 = ${m_x}t + ${c_x} = ${blockXBig}`);
+                const xSuccDisplay = `<a href="#" class="succ-x-link" data-x="${blockSuccBig}">${blockSuccBig}</a>`;
+                lines.push(`x<sup>→</sup> = (3<sup>α</sup>ρ - 1)/2<sup>β</sup> + 2·3<sup>α</sup>·t = ${m_succ}t + ${c_succ} = ${xSuccDisplay}`);
                 lines.push('');
 
-                // Block Parameters (derived from odd core)
-                if (displayX % 2n === 0n) {
-                    lines.push(`ν = v₂(x) = ${nu}`);
-                }
-                lines.push(`α = v₂(x<sub>odd</sub> + 1) = ${params.alpha}`);
-                lines.push(`β = v₂(3<sup>α</sup>ρ - 1) = ${params.beta}`);
-                lines.push(`ρ = ${params.rho}`);
-                lines.push(`t = <input type="number" id="selectedBlockTSpinner" value="${params.t}" min="0" step="1" style="width: 60px;">`);
-                lines.push(`κ = α + β = ${params.kappa}`);
+                // Block Parameters
+                lines.push(`α = ${compositeBlock.alpha}`);
+                lines.push(`β = ${compositeBlock.beta}`);
+                lines.push(`ρ = ${compositeBlock.rho}`);
+                lines.push(`φ = ${compositeBlock.phi}`);
+                lines.push(`t = <input type="number" id="selectedBlockTSpinner" value="${compositeBlock.t}" min="0" step="1" style="width: 60px;">`);
+                lines.push(`κ = α + β = ${compositeBlock.alpha + compositeBlock.beta}`);
 
                 document.getElementById('selectedBlockContent').innerHTML = lines.join('<br>');
 
                 // Set up event handlers (wrap in setTimeout to ensure DOM is updated)
+                const capturedBlock = compositeBlock;
                 setTimeout(() => {
                     const tSpinner = document.getElementById('selectedBlockTSpinner');
                     const succXLink = document.querySelector('.succ-x-link');
@@ -2981,14 +3109,49 @@
                         tSpinner.addEventListener('change', () => {
                             const newT = parseInt(tSpinner.value);
                             if (!isNaN(newT) && newT >= 0) {
-                                // Calculate new x from the affine function: x = 2^α·(ρ + t·2^(β+1)) - 1
-                                const newXB = (1n << BigInt(params.alpha)) * (BigInt(params.rho) + BigInt(newT) * BigInt(params.modulus)) - 1n;
-                                this.loadSequenceForX(newXB);
+                                // Recompute x from the composite block's affine equation
+                                // x = 2^α(ρ + t·2^(β+1)) - φ - 1
+                                const newX = Rational.pow2(capturedBlock.alpha)
+                                    .mul(capturedBlock.rho.add(Rational.fromInt(newT).mul(Rational.pow2(capturedBlock.beta + 1))))
+                                    .sub(capturedBlock.phi)
+                                    .sub(Rational.ONE);
+                                if (!newX.isInteger()) return;
+                                const newXBig = newX.toBigInt();
+                                if (newXBig < 1n) return;
+
+                                // Compute the translated successor
+                                // x→ = (3^α·ρ - 1)/2^β + 2·3^α·t
+                                const threeA = Rational.pow3(capturedBlock.alpha);
+                                const newSucc = threeA.mul(capturedBlock.rho).sub(Rational.ONE)
+                                    .div(Rational.pow2(capturedBlock.beta))
+                                    .add(new Rational(2n).mul(threeA).mul(Rational.fromInt(newT)));
+                                const newSuccBig = newSucc.isInteger() ? newSucc.toBigInt() : null;
+
+                                // Load new sequence and restore selection before
+                                // updateSelectedBlockSection runs (avoids double-render)
+                                document.getElementById('x0Input').value = newXBig.toString();
+                                const seq = new CollatzSequence(newXBig);
+                                this.currentSequence = seq;
+                                this.renderer.clear();
+                                this.renderer.addSequence(seq);
+                                this.updateCanvasPopout();
+                                this.updateInfo(seq);
+
+                                // Set selection range before rendering the block section
+                                if (newSuccBig !== null) {
+                                    this.restoreSelectionFromSucc(newXBig, newSuccBig);
+                                }
+                                if (!this.selectedRange) {
+                                    this.selectedRange = { leftX: newXBig, rightX: newXBig };
+                                }
+
+                                this.updateSelectedBlockSection();
+                                this.updateURL(newXBig);
                             }
                         });
                     }
 
-                    // Set up event handler for x→ link - changes selectedX only
+                    // Set up event handler for x→ link
                     if (succXLink) {
                         succXLink.addEventListener('click', (e) => {
                             e.preventDefault();
@@ -3001,19 +3164,11 @@
                 }, 0);
 
                 // Update block highlight on the lattice
-                // Find the selected x in the current sequence to get its o value
-                // The selected odd is at the RIGHT (high o) end of the block
-                // The block extends LEFT (lower o) by alpha steps
-                const displayXBig = BigInt(displayX);
-                const selectedStep = this.currentSequence.steps.find(s => s.x === displayXBig);
-                if (selectedStep) {
-                    const maxO = selectedStep.o;  // Selected odd is at the right edge
-                    const minO = maxO - params.alpha;  // Block extends left by alpha
-                    this.renderer.selectedBlockRange = { minO, maxO };
-                } else {
-                    // Selected x is not in the current sequence - no highlight
-                    this.renderer.selectedBlockRange = null;
-                }
+                // The composite block spans α total odd steps ending at the start x
+                const startStep = steps.find(s => s.x === blockXBig);
+                const highlightMaxO = startStep ? startStep.o : 0;
+                const highlightMinO = highlightMaxO - compositeBlock.alpha;
+                this.renderer.selectedBlockRange = { minO: highlightMinO, maxO: highlightMaxO };
                 this.renderer.render();
 
                 // Update popout window if open
@@ -3028,23 +3183,49 @@
             loadSequenceForX(x) {
                 // Called when navigating to a different x value
                 // x can be Number or BigInt
-                this.selectedX = null;
+                this.selectedRange = null;
                 document.getElementById('x0Input').value = x.toString();
                 this.plotSequence();
             }
 
-            setSelectedX(x) {
-                // Set the selected block to display without changing x0
-                // x = null means follow x0, otherwise display block for x
-                this.selectedX = x;
+            setSelectedRange(leftX, rightX) {
+                // Set the selected block range to display without changing x0
+                this.selectedRange = { leftX, rightX };
                 this.updateSelectedBlockSection();
+                // Update URL to include succ parameter
+                if (this.currentSequence) {
+                    this.updateURL(this.currentSequence.steps[0].x);
+                }
+            }
+
+            setSelectedX(x) {
+                // Shorthand: select a single block
+                this.setSelectedRange(x, x);
+            }
+
+            restoreSelectionFromSucc(x0Big, succBig) {
+                // Restore a selection range from x₀ down to (but not including) succ
+                if (!this.currentSequence) return;
+                const steps = this.currentSequence.steps;
+                const x0Step = steps.find(s => s.x === x0Big);
+                const succStep = steps.find(s => s.x === succBig);
+                if (!x0Step || !succStep) return;
+                const oddInRange = steps
+                    .filter(s => s.x % 2n === 1n && s.o > succStep.o && s.o <= x0Step.o)
+                    .sort((a, b) => a.o - b.o);
+                if (oddInRange.length > 0) {
+                    this.selectedRange = {
+                        leftX: oddInRange[0].x,
+                        rightX: oddInRange[oddInRange.length - 1].x
+                    };
+                }
             }
 
             clearCanvas() {
                 this.renderer.clear();
                 this.renderer.selectedBlockRange = null;
                 this.currentSequence = null;
-                this.selectedX = null;
+                this.selectedRange = null;
                 document.getElementById('oeSequence').textContent = '-';
                 document.getElementById('oeBlocks').textContent = '-';
                 document.getElementById('infoPanel').style.display = 'none';
@@ -3052,7 +3233,7 @@
             }
 
             loadExample(x0) {
-                this.selectedX = null;  // Reset selection when loading example
+                this.selectedRange = null;  // Reset selection when loading example
                 document.getElementById('x0Input').value = x0;
                 this.plotSequence();
             }

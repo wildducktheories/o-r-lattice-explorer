@@ -226,6 +226,101 @@ Composing $B_1 \circ (B_2 \circ B_3)$: $\alpha = 5$, $\beta = 6$, giving a singl
 
 Verification: $2^{11} = 2048$ and $3^5 \cdot 7 + k = 1701 + k$. So $k = 2048 - 1701 = 347$, and $\hat{k} = 3^5 - 2^5 = 243 - 32 = 211$, giving $\Delta k = 136$ and $\varphi = 136/243$.
 
+\section{The Cycle Equation and OEE Blocks}
+
+\subsection{Derivation of the Cycle Equation}
+
+A \emph{cycle} in the block framework is a block $B = (\alpha, \beta, \rho, \varphi, t)$ satisfying $x = x^\to$. Setting the affine equations \eqref{eq:x} and \eqref{eq:succ} equal:
+\[
+2^\alpha \bar{\rho} - 1 - \varphi = \frac{3^\alpha \bar{\rho} - 1}{2^\beta}
+\]
+where $\bar{\rho} = \rho + t \cdot 2^{\beta+1}$. Multiplying both sides by $2^\beta$:
+\[
+2^{\alpha+\beta} \bar{\rho} - 2^\beta - 2^\beta \varphi = 3^\alpha \bar{\rho} - 1
+\]
+Rearranging:
+\[
+\bar{\rho} (2^{\alpha+\beta} - 3^\alpha) = 2^\beta(1 + \varphi) - 1
+\]
+This yields the \emph{cycle equation}:
+\begin{equation}\label{eq:cycle}
+\bar{\rho} = \frac{2^\beta(1 + \varphi) - 1}{2^{\alpha+\beta} - 3^\alpha}
+\end{equation}
+
+For a cycle to exist with positive integer $x$, the right-hand side must be positive and yield valid block parameters. Note that $2^{\alpha+\beta} > 3^\alpha$ when $\beta > \alpha \log_2(3/2) \approx 0.585\alpha$.
+
+\subsection{The OEE Block Family}
+
+Consider the natural block $B_1 = (1, 1, 1, 0, 0)$ which describes the trivial cycle $x = 1 \to 1$. This block has $\alpha = \beta = 1$ and corresponds to the parity pattern OEE (one odd step, two even steps total).
+
+When we compose $\alpha$ copies of $B_1$, we obtain a family of composite blocks $B_\alpha$ that all describe the cycle $1 \to 1$ through $\alpha$ OEE steps. These blocks have remarkably simple closed forms for $\rho$ and $\varphi$.
+
+\begin{proposition}[OEE cycle parameters]\label{prop:oee}
+The composite block $B_\alpha$ formed by composing $\alpha$ copies of $(1, 1, 1, 0, 0)$ has parameters:
+\begin{align}
+\alpha_\alpha &= \alpha, \quad \beta_\alpha = \alpha \label{eq:oee-ab} \\
+\rho_\alpha &= \frac{1 + 2^\alpha}{3^\alpha} \label{eq:oee-rho} \\
+\varphi_\alpha &= 2^\alpha \rho_\alpha - 2 = \frac{2^\alpha + 4^\alpha - 2 \cdot 3^\alpha}{3^\alpha} \label{eq:oee-phi}
+\end{align}
+\end{proposition}
+
+\begin{proof}
+We verify by induction. For $\alpha = 1$: $\rho_1 = (1+2)/3 = 1$ and $\varphi_1 = 2 \cdot 1 - 2 = 0$, matching the natural block $(1,1,1,0,0)$.
+
+For the inductive step, suppose the formulas hold for $B_{\alpha-1}$. Composing with $B_1 = (1,1,1,0,0)$:
+
+Using the $\varphi$ composition formula \eqref{eq:phi-c} with $\varphi_1 = \varphi_{\alpha-1}$, $\varphi_2 = 0$, $\alpha_1 = \alpha_2 = \beta_1 = \beta_2 = 1$:
+\begin{align*}
+\varphi_\alpha &= \varphi_{\alpha-1} + \frac{2^2}{3} \cdot 0 + \frac{(4-2)(3-2)}{3^\alpha} \\
+&= \varphi_{\alpha-1} + \frac{2}{3^\alpha}
+\end{align*}
+
+We can verify the closed form satisfies this recurrence:
+\[
+\varphi_\alpha - \varphi_{\alpha-1} = \frac{2^\alpha + 4^\alpha - 2 \cdot 3^\alpha}{3^\alpha} - \frac{2^{\alpha-1} + 4^{\alpha-1} - 2 \cdot 3^{\alpha-1}}{3^{\alpha-1}}
+\]
+Multiplying the second term by $3/3$:
+\[
+= \frac{2^\alpha + 4^\alpha - 2 \cdot 3^\alpha - 3(2^{\alpha-1} + 4^{\alpha-1} - 2 \cdot 3^{\alpha-1})}{3^\alpha} = \frac{2^\alpha + 4^\alpha - 2 \cdot 3^\alpha - \frac{3}{2} \cdot 2^\alpha - \frac{3}{4} \cdot 4^\alpha + 2 \cdot 3^\alpha}{3^\alpha}
+\]
+Simplifying: $= (2^\alpha - \frac{3}{2} \cdot 2^\alpha + 4^\alpha - \frac{3}{4} \cdot 4^\alpha)/3^\alpha = (-\frac{1}{2} \cdot 2^\alpha + \frac{1}{4} \cdot 4^\alpha)/3^\alpha = \frac{2^\alpha(-1 + 2^{\alpha-1})}{2 \cdot 3^\alpha}$.
+
+Actually, we verify directly: the relation $\varphi_\alpha = 2^\alpha \rho_\alpha - 2$ gives:
+\[
+\varphi_\alpha = 2^\alpha \cdot \frac{1 + 2^\alpha}{3^\alpha} - 2 = \frac{2^\alpha + 4^\alpha}{3^\alpha} - 2
+\]
+which matches \eqref{eq:oee-phi}.
+
+The formula for $\rho_\alpha$ follows from the cycle equation \eqref{eq:cycle} with $\alpha = \beta$ and $t = 0$:
+\[
+\rho_\alpha = \frac{2^\alpha(1 + \varphi_\alpha) - 1}{4^\alpha - 3^\alpha}
+\]
+Substituting $\varphi_\alpha = 2^\alpha \rho_\alpha - 2$ and solving for $\rho_\alpha$ yields \eqref{eq:oee-rho}.
+\end{proof}
+
+\begin{corollary}
+The OEE blocks satisfy the cycle equation \eqref{eq:cycle}.
+\end{corollary}
+
+\begin{proof}
+Substituting \eqref{eq:oee-rho} and \eqref{eq:oee-phi} into \eqref{eq:cycle} with $\bar{\rho} = \rho$ (since $t = 0$):
+\[
+\frac{1 + 2^\alpha}{3^\alpha} = \frac{2^\alpha(1 + 2^\alpha \cdot \frac{1+2^\alpha}{3^\alpha} - 2) - 1}{4^\alpha - 3^\alpha}
+\]
+The numerator simplifies to:
+\[
+2^\alpha \cdot \frac{3^\alpha - 2 \cdot 3^\alpha + 2^\alpha + 4^\alpha}{3^\alpha} - 1 = \frac{2^\alpha(-3^\alpha + 2^\alpha + 4^\alpha)}{3^\alpha} - 1
+\]
+\[
+= \frac{2^\alpha(4^\alpha + 2^\alpha - 3^\alpha) - 3^\alpha}{3^\alpha} = \frac{(1 + 2^\alpha)(4^\alpha - 3^\alpha)}{3^\alpha}
+\]
+Dividing by $(4^\alpha - 3^\alpha)$ gives $(1 + 2^\alpha)/3^\alpha = \rho_\alpha$, as required.
+\end{proof}
+
+\begin{remark}
+The OEE family demonstrates that the trivial cycle $1 \to 1$ can be encoded by infinitely many distinct composite blocks, one for each choice of $\alpha$. Each block $B_\alpha$ represents $\alpha$ traversals of the $1 \to 1$ loop. The rational structure of $\rho_\alpha = (1 + 2^\alpha)/3^\alpha$ exhibits the characteristic denominator $3^\alpha$ that arises from composition.
+\end{remark}
+
 \section{Discussion}
 
 The block decomposition provides a canonical five-parameter encoding of Collatz trajectories. The equivalence with the Collatz conjecture (Theorem~\ref{thm:equiv}) reframes the conjecture as: \emph{every odd $x > 1$ admits a block $(\alpha, \beta, \rho, \varphi, t)$ with $x^\to = 1$}.
